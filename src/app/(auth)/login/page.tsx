@@ -1,0 +1,163 @@
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/firebase/auth-context";
+import { ArrowRight, Lock, Mail, AlertCircle, Sparkles } from "lucide-react";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const { login, demoLogin, loading } = useAuth();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError("Please enter both email and password.");
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email, password);
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to sign in. Please check credentials.";
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDemoSignIn = () => {
+    demoLogin();
+    router.push("/dashboard");
+  };
+
+  return (
+    <div className="min-h-screen bg-editorial-ivory flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* Brand Header */}
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <Link href="/" className="inline-flex items-center space-x-2">
+          <div className="flex h-9 w-9 items-center justify-center bg-editorial-charcoal text-editorial-ivory font-serif font-bold text-lg">
+            F
+          </div>
+          <span className="font-serif text-2xl tracking-tight font-semibold text-editorial-charcoal">
+            FolioCraft
+          </span>
+        </Link>
+        <h2 className="mt-6 font-serif text-3xl font-normal text-editorial-charcoal">
+          Welcome back
+        </h2>
+        <p className="mt-2 text-sm text-editorial-charcoal/70 font-sans">
+          Access your portfolio dashboard and live editor
+        </p>
+      </div>
+
+      {/* Card Form */}
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
+        <div className="border border-editorial-border bg-white px-8 py-10 shadow-editorial sm:px-10">
+          
+          {error && (
+            <div className="mb-6 flex items-start space-x-2.5 border border-red-200 bg-red-50/60 p-3.5 text-xs text-red-800">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-600 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Instant Demo Access Button */}
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={handleDemoSignIn}
+              className="w-full flex items-center justify-center space-x-2 border border-editorial-sand bg-editorial-sand/20 py-2.5 px-4 text-xs font-mono uppercase tracking-wider text-editorial-charcoal hover:bg-editorial-sand/40 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-editorial-mocha" />
+              <span>Continue with Instant Demo Account</span>
+            </button>
+            <div className="relative my-6 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-editorial-border" />
+              </div>
+              <span className="relative bg-white px-3 text-[11px] font-mono uppercase tracking-widest text-editorial-muted">
+                or sign in with email
+              </span>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-xs font-mono uppercase tracking-wider text-editorial-charcoal font-medium">
+                Email Address
+              </label>
+              <div className="mt-1.5 relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-editorial-muted">
+                  <Mail className="h-4 w-4" />
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="alex@morgan.design"
+                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-mono uppercase tracking-wider text-editorial-charcoal font-medium">
+                  Password
+                </label>
+                <Link
+                  href="/reset-password"
+                  className="text-xs text-editorial-mocha hover:underline"
+                >
+                  Forgot?
+                </Link>
+              </div>
+              <div className="mt-1.5 relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-editorial-muted">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting || loading}
+              className="w-full mt-6 flex items-center justify-center space-x-2 bg-editorial-charcoal py-3 px-4 text-sm font-medium text-editorial-ivory hover:bg-editorial-softdark transition-colors disabled:opacity-50"
+            >
+              <span>{submitting ? "Signing in..." : "Sign In"}</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </form>
+
+          <div className="mt-8 border-t border-editorial-border/60 pt-6 text-center">
+            <p className="text-xs text-editorial-charcoal/70">
+              Don’t have an account yet?{" "}
+              <Link href="/signup" className="font-semibold text-editorial-charcoal hover:underline">
+                Create your portfolio
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

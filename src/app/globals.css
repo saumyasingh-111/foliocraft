@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-playfair: "Playfair Display", Georgia, serif;
+  --font-cormorant: "Cormorant Garamond", Georgia, serif;
+  --font-dm-sans: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-space-grotesk: "Space Grotesk", monospace, sans-serif;
+
+  /* Editorial Platform Default Theme Vars */
+  --theme-primary: #292724;
+  --theme-secondary: #927A65;
+  --theme-background: #F5F1E9;
+  --theme-surface: #FFFFFF;
+  --theme-text: #292724;
+  --theme-text-muted: #78716C;
+  --theme-accent: #927A65;
+  --theme-border: #E5DEC9;
+  --theme-radius: 0.25rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #F5F1E9;
+  color: #292724;
+  font-family: var(--font-dm-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom editorial scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F1E9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D9CBB8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #927A65;
+}
+
+/* Selection styling */
+::selection {
+  background: #292724;
+  color: #F5F1E9;
+}
