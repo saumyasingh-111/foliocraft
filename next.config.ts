@@ -2,12 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: [
+    "firebase",
+    "@firebase/app",
+    "@firebase/auth",
+    "@firebase/firestore",
+    "@firebase/storage",
+  ],
   images: {
-    domains: [
-      "firebasestorage.googleapis.com",
-      "images.unsplash.com",
-      "avatars.githubusercontent.com",
-    ],
     remotePatterns: [
       {
         protocol: "https",

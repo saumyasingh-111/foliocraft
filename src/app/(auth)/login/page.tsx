@@ -4,11 +4,11 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/firebase/auth-context";
-import { ArrowRight, Lock, Mail, AlertCircle, Sparkles } from "lucide-react";
+import { ArrowRight, Lock, Mail, AlertCircle, AlertTriangle } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, demoLogin, loading } = useAuth();
+  const { login, isConfigured, missingConfig, loading } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,8 +17,15 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       setError("Please enter both email and password.");
+      return;
+    }
+
+    if (!isConfigured) {
+      setError(
+        "Authentication service is not configured. Please configure your Firebase environment variables."
+      );
       return;
     }
 
@@ -35,11 +42,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoSignIn = () => {
-    demoLogin();
-    router.push("/dashboard");
-  };
-
   return (
     <div className="min-h-screen bg-editorial-ivory flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {/* Brand Header */}
@@ -53,10 +55,10 @@ export default function LoginPage() {
           </span>
         </Link>
         <h2 className="mt-6 font-serif text-3xl font-normal text-editorial-charcoal">
-          Welcome back
+          Sign In
         </h2>
         <p className="mt-2 text-sm text-editorial-charcoal/70 font-sans">
-          Access your portfolio dashboard and live editor
+          Access your portfolio dashboard and visual editor
         </p>
       </div>
 
@@ -64,32 +66,31 @@ export default function LoginPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="border border-editorial-border bg-white px-8 py-10 shadow-editorial sm:px-10">
           
+          {/* Missing Configuration Notice */}
+          {!isConfigured && (
+            <div className="mb-6 border border-amber-300 bg-amber-50/80 p-4 text-xs text-amber-900 space-y-2">
+              <div className="flex items-center space-x-2 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-amber-700 flex-shrink-0" />
+                <span>Authentication Service Not Configured</span>
+              </div>
+              <p className="leading-relaxed">
+                Firebase credentials are missing from your environment. To enable real authentication, configure the following variables in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">.env.local</code>:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 font-mono text-[11px] text-amber-800">
+                {missingConfig.map((key) => (
+                  <li key={key}>{key}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Form Error Notice */}
           {error && (
-            <div className="mb-6 flex items-start space-x-2.5 border border-red-200 bg-red-50/60 p-3.5 text-xs text-red-800">
+            <div className="mb-6 flex items-start space-x-2.5 border border-red-200 bg-red-50/70 p-3.5 text-xs text-red-800">
               <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-600 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
-
-          {/* Instant Demo Access Button */}
-          <div className="mb-6">
-            <button
-              type="button"
-              onClick={handleDemoSignIn}
-              className="w-full flex items-center justify-center space-x-2 border border-editorial-sand bg-editorial-sand/20 py-2.5 px-4 text-xs font-mono uppercase tracking-wider text-editorial-charcoal hover:bg-editorial-sand/40 transition-colors"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-editorial-mocha" />
-              <span>Continue with Instant Demo Account</span>
-            </button>
-            <div className="relative my-6 text-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-editorial-border" />
-              </div>
-              <span className="relative bg-white px-3 text-[11px] font-mono uppercase tracking-widest text-editorial-muted">
-                or sign in with email
-              </span>
-            </div>
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
@@ -104,7 +105,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="alex@morgan.design"
+                  placeholder="name@example.com"
                   className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
                   required
                 />

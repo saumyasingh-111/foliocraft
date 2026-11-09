@@ -3,10 +3,10 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/firebase/auth-context";
-import { ArrowLeft, Mail, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Mail, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
 
 export default function ResetPasswordPage() {
-  const { resetPassword } = useAuth();
+  const { resetPassword, isConfigured, missingConfig } = useAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +14,14 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email.trim()) return;
+
+    if (!isConfigured) {
+      setError(
+        "Authentication service is not configured. Please configure your Firebase environment variables."
+      );
+      return;
+    }
 
     setError(null);
     setSubmitting(true);
@@ -51,6 +58,24 @@ export default function ResetPasswordPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="border border-editorial-border bg-white px-8 py-10 shadow-editorial sm:px-10">
           
+          {/* Missing Configuration Notice */}
+          {!isConfigured && (
+            <div className="mb-6 border border-amber-300 bg-amber-50/80 p-4 text-xs text-amber-900 space-y-2">
+              <div className="flex items-center space-x-2 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-amber-700 flex-shrink-0" />
+                <span>Authentication Service Not Configured</span>
+              </div>
+              <p className="leading-relaxed">
+                Firebase credentials are missing from your environment. To enable password recovery, configure the following variables in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">.env.local</code>:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 font-mono text-[11px] text-amber-800">
+                {missingConfig.map((key) => (
+                  <li key={key}>{key}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {sent ? (
             <div className="space-y-4 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
@@ -93,7 +118,7 @@ export default function ResetPasswordPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="alex@morgan.design"
+                    placeholder="name@example.com"
                     className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
                     required
                   />

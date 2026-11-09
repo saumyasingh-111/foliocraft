@@ -12,42 +12,38 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
 };
 
+export function getMissingFirebaseConfig(): string[] {
+  const missing: string[] = [];
+  if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) missing.push("NEXT_PUBLIC_FIREBASE_API_KEY");
+  if (!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) missing.push("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
+  if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) missing.push("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+  if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) missing.push("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET");
+  if (!process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) missing.push("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID");
+  if (!process.env.NEXT_PUBLIC_FIREBASE_APP_ID) missing.push("NEXT_PUBLIC_FIREBASE_APP_ID");
+  return missing;
+}
+
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey &&
-  firebaseConfig.projectId &&
-  firebaseConfig.authDomain
+  firebaseConfig.authDomain &&
+  firebaseConfig.projectId
 );
 
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let db: Firestore | undefined;
-let storage: FirebaseStorage | undefined;
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 
-if (typeof window !== "undefined" || isFirebaseConfigured) {
+if (isFirebaseConfigured) {
   try {
-    if (!getApps().length) {
-      if (isFirebaseConfigured) {
-        app = initializeApp(firebaseConfig);
-      } else {
-        // Fallback placeholder init for client dev prior to adding keys
-        app = initializeApp({
-          apiKey: "demo-api-key-for-development",
-          authDomain: "portfolio-builder-demo.firebaseapp.com",
-          projectId: "portfolio-builder-demo",
-          storageBucket: "portfolio-builder-demo.appspot.com",
-        });
-      }
-    } else {
-      app = getApp();
-    }
-
-    if (app) {
+    app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    if (typeof window !== "undefined") {
       auth = getAuth(app);
-      db = getFirestore(app);
       storage = getStorage(app);
     }
+    db = getFirestore(app);
   } catch (error) {
-    console.warn("Firebase initialization warning (using local fallback mode):", error);
+    console.error("Firebase initialization failed:", error);
   }
 }
 

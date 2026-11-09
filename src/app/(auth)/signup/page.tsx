@@ -4,14 +4,14 @@ import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/firebase/auth-context";
-import { ArrowRight, Lock, Mail, User, AlertCircle, Sparkles } from "lucide-react";
+import { ArrowRight, Lock, Mail, User, AlertCircle, AlertTriangle } from "lucide-react";
 
 function SignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedTheme = searchParams.get("theme");
 
-  const { signup, demoLogin, loading } = useAuth();
+  const { signup, isConfigured, missingConfig, loading } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -21,13 +21,20 @@ function SignupContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password || !name) {
+    if (!email.trim() || !password || !name.trim()) {
       setError("Please complete all required fields.");
       return;
     }
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (!isConfigured) {
+      setError(
+        "Authentication service is not configured. Please configure your Firebase environment variables."
+      );
       return;
     }
 
@@ -45,14 +52,6 @@ function SignupContent() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleDemoSignIn = () => {
-    demoLogin();
-    const target = preselectedTheme
-      ? `/onboarding?theme=${preselectedTheme}`
-      : "/onboarding";
-    router.push(target);
   };
 
   return (
@@ -78,32 +77,30 @@ function SignupContent() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="border border-editorial-border bg-white px-8 py-10 shadow-editorial sm:px-10">
           
+          {/* Missing Configuration Notice */}
+          {!isConfigured && (
+            <div className="mb-6 border border-amber-300 bg-amber-50/80 p-4 text-xs text-amber-900 space-y-2">
+              <div className="flex items-center space-x-2 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-amber-700 flex-shrink-0" />
+                <span>Authentication Service Not Configured</span>
+              </div>
+              <p className="leading-relaxed">
+                Firebase credentials are missing from your environment. To enable real account creation, configure the following variables in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">.env.local</code>:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 font-mono text-[11px] text-amber-800">
+                {missingConfig.map((key) => (
+                  <li key={key}>{key}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {error && (
-            <div className="mb-6 flex items-start space-x-2.5 border border-red-200 bg-red-50/60 p-3.5 text-xs text-red-800">
+            <div className="mb-6 flex items-start space-x-2.5 border border-red-200 bg-red-50/70 p-3.5 text-xs text-red-800">
               <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-600 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
-
-          {/* Instant Demo Account Button */}
-          <div className="mb-6">
-            <button
-              type="button"
-              onClick={handleDemoSignIn}
-              className="w-full flex items-center justify-center space-x-2 border border-editorial-sand bg-editorial-sand/20 py-2.5 px-4 text-xs font-mono uppercase tracking-wider text-editorial-charcoal hover:bg-editorial-sand/40 transition-colors"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-editorial-mocha" />
-              <span>Quick Start with Demo Account</span>
-            </button>
-            <div className="relative my-6 text-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-editorial-border" />
-              </div>
-              <span className="relative bg-white px-3 text-[11px] font-mono uppercase tracking-widest text-editorial-muted">
-                or create an account
-              </span>
-            </div>
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -137,7 +134,7 @@ function SignupContent() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="alex@morgan.design"
+                  placeholder="name@example.com"
                   className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
                   required
                 />
@@ -189,7 +186,7 @@ function SignupContent() {
 
 export default function SignupPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-editorial-ivory flex items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-editorial-ivory flex items-center justify-center font-mono text-xs">Loading Signup...</div>}>
       <SignupContent />
     </Suspense>
   );
