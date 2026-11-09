@@ -219,6 +219,39 @@ export default function VisualEditorPage({
     }
   };
 
+  const handleProjectCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>, projectId: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !data) return;
+    setUploadingImage(true);
+    try {
+      const url = await uploadPortfolioMedia(file, user.uid, data.portfolioId, "projects");
+      updateData((prev) => ({
+        ...prev,
+        projects: prev.projects.map((p) =>
+          p.id === projectId ? { ...p, coverImageUrl: url } : p
+        ),
+      }));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Project screenshot upload failed");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !data) return;
+    setUploadingImage(true);
+    try {
+      const url = await uploadPortfolioMedia(file, user.uid, data.portfolioId, "resumes");
+      updateData((prev) => ({ ...prev, resumeUrl: url }));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Resume upload failed");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   if (loading || !data) {
     return (
       <div className="min-h-screen bg-editorial-ivory flex flex-col items-center justify-center space-y-4">
@@ -465,6 +498,37 @@ export default function VisualEditorPage({
                 {/* Sub: Personal Information */}
                 {contentSubSection === "personal" && (
                   <div className="space-y-5">
+                    {/* Avatar Upload */}
+                    <div className="flex items-center space-x-4 border-b border-editorial-border pb-4">
+                      {data.personalInfo.avatarUrl ? (
+                        <img
+                          src={data.personalInfo.avatarUrl}
+                          alt={data.personalInfo.fullName}
+                          className="h-16 w-16 rounded-full object-cover border border-editorial-border"
+                        />
+                      ) : (
+                        <div className="h-16 w-16 rounded-full bg-editorial-sand/40 border border-editorial-border flex items-center justify-center font-serif text-xl text-editorial-charcoal">
+                          {data.personalInfo.fullName.charAt(0) || "U"}
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-mono uppercase text-editorial-charcoal font-medium">
+                          Profile Photo
+                        </label>
+                        <label className="inline-flex items-center space-x-1.5 border border-editorial-border bg-editorial-ivory px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 transition-colors">
+                          <Upload className="h-3 w-3 text-editorial-mocha" />
+                          <span>{uploadingImage ? "Uploading..." : "Upload New Photo"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleAvatarUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <p className="text-[10px] text-editorial-muted">JPG, PNG, WebP up to 5MB</p>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-mono uppercase text-editorial-charcoal font-medium">
                         Full Name
@@ -584,6 +648,49 @@ export default function VisualEditorPage({
                         className="mt-1 block w-full border border-editorial-border bg-editorial-ivory/30 px-3 py-2 text-sm"
                       />
                     </div>
+
+                    <div className="pt-3 border-t border-editorial-border space-y-2">
+                      <label className="block text-xs font-mono uppercase text-editorial-charcoal font-medium">
+                        Resume PDF Document
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="url"
+                          value={data.resumeUrl || ""}
+                          onChange={(e) =>
+                            updateData((prev) => ({ ...prev, resumeUrl: e.target.value }))
+                          }
+                          placeholder="https://... or upload PDF document"
+                          className="flex-grow border border-editorial-border bg-editorial-ivory/30 px-3 py-1.5 text-xs font-mono"
+                        />
+                        <label className="inline-flex items-center space-x-1 border border-editorial-border bg-editorial-ivory px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 flex-shrink-0 transition-colors">
+                          <Upload className="h-3 w-3 text-editorial-mocha" />
+                          <span>{uploadingImage ? "Uploading..." : "Upload PDF"}</span>
+                          <input
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            onChange={handleResumeUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                      {data.resumeUrl && (
+                        <div className="flex items-center space-x-1.5 text-[11px] font-mono text-emerald-700">
+                          <Check className="h-3 w-3" />
+                          <span>
+                            Resume active:{" "}
+                            <a
+                              href={data.resumeUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline font-semibold"
+                            >
+                              Open PDF
+                            </a>
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -689,21 +796,41 @@ export default function VisualEditorPage({
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-mono uppercase text-editorial-muted">Image URL</label>
-                          <input
-                            type="url"
-                            value={proj.coverImageUrl || ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              updateData((prev) => ({
-                                ...prev,
-                                projects: prev.projects.map((p) =>
-                                  p.id === proj.id ? { ...p, coverImageUrl: val } : p
-                                ),
-                              }));
-                            }}
-                            className="mt-1 block w-full border border-editorial-border bg-white px-2.5 py-1.5 text-xs"
-                          />
+                          <label className="block text-[11px] font-mono uppercase text-editorial-muted">Cover Screenshot / Image</label>
+                          <div className="mt-1 flex items-center space-x-2">
+                            {proj.coverImageUrl && (
+                              <img
+                                src={proj.coverImageUrl}
+                                alt={proj.title}
+                                className="h-9 w-12 object-cover border border-editorial-border bg-white rounded-none"
+                              />
+                            )}
+                            <input
+                              type="url"
+                              value={proj.coverImageUrl || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateData((prev) => ({
+                                  ...prev,
+                                  projects: prev.projects.map((p) =>
+                                    p.id === proj.id ? { ...p, coverImageUrl: val } : p
+                                  ),
+                                }));
+                              }}
+                              placeholder="https://... or upload"
+                              className="flex-grow border border-editorial-border bg-white px-2.5 py-1.5 text-xs font-mono"
+                            />
+                            <label className="inline-flex items-center space-x-1 border border-editorial-border bg-editorial-ivory px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 flex-shrink-0 transition-colors">
+                              <Upload className="h-3 w-3 text-editorial-mocha" />
+                              <span>{uploadingImage ? "..." : "Upload"}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleProjectCoverUpload(e, proj.id)}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">

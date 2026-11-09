@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   serverExternalPackages: [
     "firebase",
+    "firebase-admin",
     "@firebase/app",
     "@firebase/auth",
     "@firebase/firestore",

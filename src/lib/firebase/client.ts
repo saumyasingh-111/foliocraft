@@ -43,8 +43,41 @@ if (isFirebaseConfigured) {
     }
     db = getFirestore(app);
   } catch (error) {
-    console.error("Firebase initialization failed:", error);
+    console.error("Firebase client initialization failed:", error);
   }
+}
+
+export function getClientApp(): FirebaseApp | null {
+  if (!app && isFirebaseConfigured) {
+    app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  }
+  return app;
+}
+
+export function getClientAuth(): Auth | null {
+  if (typeof window === "undefined") return null;
+  if (!auth) {
+    const a = getClientApp();
+    if (a) auth = getAuth(a);
+  }
+  return auth;
+}
+
+export function getClientDb(): Firestore | null {
+  if (!db) {
+    const a = getClientApp();
+    if (a) db = getFirestore(a);
+  }
+  return db;
+}
+
+export function getClientStorage(): FirebaseStorage | null {
+  if (typeof window === "undefined") return null;
+  if (!storage) {
+    const a = getClientApp();
+    if (a) storage = getStorage(a);
+  }
+  return storage;
 }
 
 export { app, auth, db, storage };

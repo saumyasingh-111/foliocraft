@@ -11,29 +11,59 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Users collection: Private to owner
+    // 1. Users collection: Strictly private to authenticated owner
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if false; // Prevent accidental account deletion from client
     }
 
-    // Usernames collection: Unique slug reservations
+    // 2. Portfolios collection: Multi-tenant portfolios
+    match /portfolios/{portfolioId} {
+      // Public read if portfolio is marked published; owner read if draft
+      allow read: if resource.data.isPublished == true || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      
+      // Creation: must be authenticated and assign ownership to self
+      allow create: if isAuthenticated() 
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.portfolioId == portfolioId;
+
+      // Mutation & Deletion: strictly restricted to portfolio owner
+      allow update: if isAuthenticated() 
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid;
+
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // 3. Usernames collection: Unique slug reservation
     match /usernames/{username} {
-      // Anyone can check if a slug is taken
+      // Anyone can query to check if a slug is available
       allow read: if true;
-      // Write allowed if authenticated and setting for own portfolio
+      // Reservation requires authentication and claiming for self
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
-    // Portfolios collection: Multi-tenant portfolios
-    match /portfolios/{portfolioId} {
-      // Public read if published; owner read if draft
-      allow read: if resource.data.isPublished == true || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      
-      // Create if authenticated
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    // 4. Themes collection: Read-only catalog for clients
+    match /themes/{themeId} {
+      allow read: if true;
+      allow write: if false;
+    }
 
-      // Update and delete strictly restricted to owner
+    // 5. Analytics collection: Aggregated telemetry
+    match /analytics/{portfolioId} {
+      // Owners can read their portfolio telemetry
+      allow read: if isAuthenticated();
+      // Increments permitted for page views
+      allow write: if true;
+    }
+
+    // 6. Custom Domains collection
+    match /customDomains/{domain} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
   }

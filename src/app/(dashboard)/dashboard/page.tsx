@@ -8,6 +8,7 @@ import {
   getUserPortfolios,
   savePortfolio,
   deletePortfolio,
+  getPortfolioAnalytics,
 } from "@/lib/db/portfolios";
 import { PortfolioData, ThemeId } from "@/themes/types";
 import { THEME_REGISTRY, INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
@@ -27,6 +28,8 @@ import {
   ShieldCheck,
   Clock,
   Palette,
+  BarChart2,
+  Users,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -37,6 +40,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<{ visitorCount: number; pageViews: number; lastVisited: string } | null>(null);
 
   useEffect(() => {
     if (user?.uid) {
@@ -49,6 +53,10 @@ export default function DashboardPage() {
     try {
       const data = await getUserPortfolios(uid);
       setPortfolios(data);
+      if (data.length > 0) {
+        const stats = await getPortfolioAnalytics(data[0].portfolioId);
+        if (stats) setAnalytics(stats);
+      }
     } catch (err) {
       console.error("Failed to load user portfolios:", err);
     } finally {
@@ -110,7 +118,7 @@ export default function DashboardPage() {
     if (!confirm("Are you sure you want to delete this portfolio? This cannot be undone.")) {
       return;
     }
-    await deletePortfolio(portfolioId);
+    await deletePortfolio(portfolioId, user?.uid);
     setPortfolios((prev) => prev.filter((p) => p.portfolioId !== portfolioId));
     setActionMessage("Portfolio deleted.");
     setTimeout(() => setActionMessage(null), 3000);
@@ -203,9 +211,50 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Real Analytics Quick Bar */}
+        {primaryPortfolio && (
+          <div className="mt-8 pt-6 border-t border-editorial-border/60 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-3 border border-editorial-border bg-editorial-ivory/40">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-editorial-muted block">
+                Publication Status
+              </span>
+              <span className="text-sm font-serif font-bold text-editorial-charcoal mt-0.5 block">
+                {primaryPortfolio.isPublished ? "Live (Public)" : "Draft (Private)"}
+              </span>
+            </div>
+
+            <div className="p-3 border border-editorial-border bg-editorial-ivory/40">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-editorial-muted block">
+                Total Page Views
+              </span>
+              <span className="text-sm font-serif font-bold text-editorial-charcoal mt-0.5 block">
+                {analytics?.pageViews ?? 0}
+              </span>
+            </div>
+
+            <div className="p-3 border border-editorial-border bg-editorial-ivory/40">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-editorial-muted block">
+                Active Theme
+              </span>
+              <span className="text-sm font-serif font-bold text-editorial-charcoal mt-0.5 block truncate">
+                {THEME_REGISTRY.find((t) => t.id === primaryPortfolio.themeId)?.name || primaryPortfolio.themeId}
+              </span>
+            </div>
+
+            <div className="p-3 border border-editorial-border bg-editorial-ivory/40">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-editorial-muted block">
+                Profile Completeness
+              </span>
+              <span className="text-sm font-serif font-bold text-editorial-charcoal mt-0.5 block">
+                {calculateCompleteness(primaryPortfolio)}%
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Primary Portfolio Quick URL Bar */}
         {primaryPortfolio && (
-          <div className="mt-8 pt-8 border-t border-editorial-border/60 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          <div className="mt-6 pt-6 border-t border-editorial-border/60 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
             <div className="md:col-span-8 flex flex-col sm:flex-row sm:items-center gap-3">
               <span className="text-xs font-mono uppercase text-editorial-muted whitespace-nowrap">
                 Public Web Address:
@@ -265,7 +314,7 @@ export default function DashboardPage() {
       {loading ? (
         <div className="border border-editorial-border bg-white p-12 text-center">
           <div className="inline-block h-8 w-8 border-2 border-editorial-charcoal border-t-transparent rounded-full animate-spin mb-3" />
-          <p className="text-xs font-mono uppercase text-editorial-muted">Retrieving Portfolios...</p>
+          <p className="text-xs font-mono uppercase text-editorial-muted">Retrieving Portfolios from Firestore...</p>
         </div>
       ) : portfolios.length === 0 ? (
         <div className="border border-editorial-border bg-white p-12 text-center space-y-4">

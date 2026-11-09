@@ -167,6 +167,37 @@ function OnboardingWizardContent() {
     }
   };
 
+  const handleProjectCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>, projectId: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingImage(true);
+    try {
+      const url = await uploadPortfolioMedia(file, user.uid, formData.portfolioId, "projects");
+      setFormData((prev) => ({
+        ...prev,
+        projects: prev.projects.map((p) => (p.id === projectId ? { ...p, coverImageUrl: url } : p)),
+      }));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to upload project screenshot.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingImage(true);
+    try {
+      const url = await uploadPortfolioMedia(file, user.uid, formData.portfolioId, "resumes");
+      setFormData((prev) => ({ ...prev, resumeUrl: url }));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to upload resume.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // Education Helpers
   const addEducation = () => {
     const item: EducationItem = {
@@ -999,6 +1030,46 @@ function OnboardingWizardContent() {
                     className="mt-1 block w-full border border-editorial-border bg-white px-3 py-2 text-sm"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-mono uppercase text-editorial-charcoal">Cover Image / Screenshot</label>
+                  <div className="mt-1.5 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    {proj.coverImageUrl && (
+                      <img
+                        src={proj.coverImageUrl}
+                        alt={proj.title || "Project preview"}
+                        className="h-12 w-20 object-cover border border-editorial-border bg-editorial-ivory"
+                      />
+                    )}
+                    <div className="flex-grow w-full">
+                      <input
+                        type="url"
+                        value={proj.coverImageUrl || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData((prev) => ({
+                            ...prev,
+                            projects: prev.projects.map((p) =>
+                              p.id === proj.id ? { ...p, coverImageUrl: val } : p
+                            ),
+                          }));
+                        }}
+                        placeholder="https://... or upload a screenshot"
+                        className="block w-full border border-editorial-border bg-white px-3 py-1.5 text-xs font-mono"
+                      />
+                    </div>
+                    <label className="inline-flex items-center space-x-1.5 border border-editorial-border bg-editorial-ivory px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 flex-shrink-0 transition-colors">
+                      <Upload className="h-3 w-3 text-editorial-mocha" />
+                      <span>{uploadingImage ? "Uploading..." : "Upload Screenshot"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleProjectCoverUpload(e, proj.id)}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -1177,19 +1248,49 @@ function OnboardingWizardContent() {
 
             <div>
               <label className="block text-xs font-mono uppercase tracking-wider text-editorial-charcoal font-medium">
-                Resume PDF URL or Cloud Document Link
+                Resume PDF Document
               </label>
-              <input
-                type="url"
-                value={formData.resumeUrl || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, resumeUrl: e.target.value }))
-                }
-                placeholder="https://drive.google.com/... or hosted PDF link"
-                className="mt-1.5 block w-full border border-editorial-border bg-editorial-ivory/30 px-3.5 py-2.5 text-sm"
-              />
-              <p className="mt-1.5 text-[11px] text-editorial-muted font-mono">
-                Leaving this empty will simply omit the resume button on your site.
+              <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex-grow w-full">
+                  <input
+                    type="url"
+                    value={formData.resumeUrl || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, resumeUrl: e.target.value }))
+                    }
+                    placeholder="https://... or upload PDF from device"
+                    className="block w-full border border-editorial-border bg-editorial-ivory/30 px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+                <label className="inline-flex items-center space-x-2 border border-editorial-charcoal bg-editorial-charcoal text-editorial-ivory px-4 py-2.5 text-xs font-mono uppercase tracking-wider cursor-pointer hover:bg-editorial-softdark transition-colors flex-shrink-0">
+                  <Upload className="h-3.5 w-3.5" />
+                  <span>{uploadingImage ? "Uploading..." : "Upload PDF Resume"}</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={handleResumeUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              {formData.resumeUrl && (
+                <div className="mt-2 flex items-center space-x-2 text-xs font-mono text-emerald-700">
+                  <Check className="h-3.5 w-3.5" />
+                  <span>
+                    Resume attached:{" "}
+                    <a
+                      href={formData.resumeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-semibold"
+                    >
+                      View Document
+                    </a>
+                  </span>
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-editorial-muted font-mono">
+                Supports PDF up to 10MB stored securely in Firebase Storage. Leaving this empty will omit the resume button on your site.
               </p>
             </div>
           </div>
