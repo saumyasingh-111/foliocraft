@@ -3,7 +3,9 @@ import { revalidatePath } from "next/cache";
 import {
   getPortfolioByIdFromFirestore,
   savePortfolioToFirestore,
+  getUserProfile,
 } from "@/lib/firebase/firestore";
+import { getPortfolioUrl } from "@/lib/utils/url";
 
 interface Props {
   params: Promise<{ portfolioId: string }>;
@@ -27,6 +29,16 @@ export async function POST(request: NextRequest, { params }: Props) {
       );
     }
 
+    if (isPublished) {
+      const userProfile = await getUserProfile(portfolio.userId);
+      if (userProfile && userProfile.emailVerified === false) {
+        return NextResponse.json(
+          { error: "Email verification required before publishing live websites." },
+          { status: 403 }
+        );
+      }
+    }
+
     const updatedPortfolio = {
       ...portfolio,
       isPublished: Boolean(isPublished),
@@ -46,6 +58,7 @@ export async function POST(request: NextRequest, { params }: Props) {
       success: true,
       isPublished: updatedPortfolio.isPublished,
       publishedAt: updatedPortfolio.publishedAt,
+      publicUrl: getPortfolioUrl(portfolio.username),
     });
   } catch (err: unknown) {
     console.error("POST /api/portfolios/[portfolioId]/publish error:", err);

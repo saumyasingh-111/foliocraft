@@ -1,9 +1,11 @@
 import React from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { getPortfolioByUsername } from "@/lib/db/portfolios";
 import { ThemeRenderer } from "@/themes/ThemeRenderer";
 import { INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
+import { getPortfolioUrl } from "@/lib/utils/url";
 import { ArrowLeft, Sparkles, Globe } from "lucide-react";
 
 interface Props {
@@ -25,14 +27,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = portfolio.personalInfo.professionalTitle;
   const headline = portfolio.personalInfo.heroHeadline || portfolio.personalInfo.tagline || "";
   const avatar = portfolio.personalInfo.avatarUrl;
+  const portfolioUrl = getPortfolioUrl(username);
 
   return {
     title: `${name} — ${title}`,
     description: headline || `${name}'s personal portfolio and selected works.`,
+    alternates: {
+      canonical: portfolioUrl,
+    },
     openGraph: {
       title: `${name} — ${title}`,
       description: headline,
       type: "profile",
+      url: portfolioUrl,
       images: avatar ? [{ url: avatar }] : [],
     },
     twitter: {
@@ -60,9 +67,13 @@ export default async function PublicPortfolioPage({ params }: Props) {
     return (
       <div className="min-h-screen bg-editorial-ivory flex flex-col items-center justify-center p-6 text-center">
         <div className="border border-editorial-border bg-white p-10 max-w-md shadow-editorial space-y-6">
-          <div className="h-12 w-12 border border-editorial-charcoal bg-editorial-charcoal text-editorial-ivory mx-auto flex items-center justify-center font-serif text-xl font-bold">
-            F
-          </div>
+          <Image
+            src="/logo.png"
+            alt="FolioCraft"
+            width={48}
+            height={48}
+            className="h-12 w-12 object-contain mx-auto rounded-sm"
+          />
           <div className="space-y-2">
             <h1 className="font-serif text-2xl text-editorial-charcoal">
               Portfolio Not Accessible
@@ -93,7 +104,7 @@ export default async function PublicPortfolioPage({ params }: Props) {
     name: portfolio.personalInfo.fullName,
     jobTitle: portfolio.personalInfo.professionalTitle,
     description: portfolio.about.bioLong || portfolio.personalInfo.tagline,
-    url: typeof window !== "undefined" ? window.location.href : undefined,
+    url: getPortfolioUrl(username),
     image: portfolio.personalInfo.avatarUrl,
     sameAs: [
       portfolio.socialLinks.linkedin,
@@ -121,7 +132,13 @@ export default async function PublicPortfolioPage({ params }: Props) {
           target="_blank"
           className="group inline-flex items-center space-x-2 border border-editorial-charcoal/20 bg-white/95 px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider text-editorial-charcoal shadow-editorial backdrop-blur hover:border-editorial-charcoal hover:bg-white transition-all"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-editorial-mocha group-hover:scale-125 transition-transform" />
+          <Image
+            src="/logo.png"
+            alt="FolioCraft"
+            width={16}
+            height={16}
+            className="h-3.5 w-3.5 object-contain rounded-xs"
+          />
           <span>Made with FolioCraft</span>
         </Link>
       </aside>

@@ -6,6 +6,7 @@ const RESERVED_PLATFORM_ROUTES = [
   "/login",
   "/signup",
   "/reset-password",
+  "/verify-email",
   "/dashboard",
   "/onboarding",
   "/settings",
@@ -45,7 +46,13 @@ export function middleware(request: NextRequest) {
   }
 
   // 4. Subdomain Resolution
-  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN || "localhost:3000";
+  const rawBase =
+    process.env.NEXT_PUBLIC_APP_DOMAIN ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL ||
+    process.env.VERCEL_URL ||
+    "localhost:3000";
+  const appDomain = rawBase.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   // Remove port for domain comparisons
   const hostWithoutPort = hostname.split(":")[0].toLowerCase();
   const baseDomainWithoutPort = appDomain.split(":")[0].toLowerCase();

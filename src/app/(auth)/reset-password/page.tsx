@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/lib/firebase/auth-context";
 import { ArrowLeft, Mail, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
 
@@ -39,10 +40,15 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-editorial-ivory flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link href="/" className="inline-flex items-center space-x-2">
-          <div className="flex h-9 w-9 items-center justify-center bg-editorial-charcoal text-editorial-ivory font-serif font-bold text-lg">
-            F
-          </div>
+        <Link href="/" className="inline-flex items-center space-x-2.5">
+          <Image
+            src="/logo.png"
+            alt="FolioCraft"
+            width={40}
+            height={40}
+            className="h-10 w-10 object-contain rounded-sm"
+            priority
+          />
           <span className="font-serif text-2xl tracking-tight font-semibold text-editorial-charcoal">
             FolioCraft
           </span>

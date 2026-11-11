@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowUpRight } from "lucide-react";
 
 export function Footer() {
@@ -11,9 +12,13 @@ export function Footer() {
           <div className="md:col-span-5 flex flex-col justify-between">
             <div className="space-y-4">
               <div className="flex items-center space-x-2.5">
-                <div className="flex h-8 w-8 items-center justify-center bg-editorial-charcoal text-editorial-ivory">
-                  <span className="font-serif text-base font-bold">F</span>
-                </div>
+                <Image
+                  src="/logo.png"
+                  alt="FolioCraft"
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 object-contain rounded-sm"
+                />
                 <span className="font-serif text-xl tracking-tight font-semibold">FolioCraft</span>
               </div>
               <p className="max-w-sm font-serif text-lg leading-relaxed text-editorial-charcoal/80 italic">
@@ -118,6 +123,11 @@ export function Footer() {
               </a>
             </div>
           </div>
+        </div>
+
+        {/* At the very last of the footer */}
+        <div className="mt-12 pt-8 border-t border-editorial-border/60 text-center text-xs font-mono text-editorial-charcoal">
+          {"Made by Saumya<3"}
         </div>
       </div>
     </footer>

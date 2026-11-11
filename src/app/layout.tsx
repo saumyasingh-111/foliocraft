@@ -58,6 +58,11 @@ export const metadata: Metadata = {
   title: "FolioCraft — The Editorial Portfolio Builder",
   description:
     "Design and publish your personal portfolio website with bespoke typography, curated themes, and effortless no-code publishing.",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({

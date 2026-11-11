@@ -21,6 +21,7 @@ import {
 } from "@/themes/types";
 import { THEME_REGISTRY, INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
 import { slugify } from "@/lib/utils/slugify";
+import { getAppDomain } from "@/lib/utils/url";
 import {
   User,
   BookOpen,
@@ -1189,7 +1190,7 @@ function OnboardingWizardContent() {
               </label>
               <div className="mt-1.5 flex items-center">
                 <span className="border border-r-0 border-editorial-border bg-editorial-sand/30 px-3 py-2.5 text-xs font-mono text-editorial-charcoal">
-                  foliocraft.com/portfolio/
+                  {getAppDomain()}/portfolio/
                 </span>
                 <input
                   type="text"

@@ -41,6 +41,7 @@ export interface UserProfileDocument {
   uid: string;
   fullName: string;
   email: string;
+  emailVerified?: boolean;
   photoURL?: string | null;
   username?: string | null;
   bio?: string | null;

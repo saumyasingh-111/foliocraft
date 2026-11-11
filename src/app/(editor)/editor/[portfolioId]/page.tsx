@@ -31,6 +31,7 @@ import {
   INITIAL_DEFAULT_PORTFOLIO,
 } from "@/lib/utils/defaults";
 import { slugify } from "@/lib/utils/slugify";
+import { getPortfolioUrl, getDisplayPortfolioUrl } from "@/lib/utils/url";
 import {
   Monitor,
   Tablet,
@@ -65,6 +66,9 @@ import {
   Copy,
   Edit3,
   Wand2,
+  ShieldAlert,
+  Mail,
+  X,
 } from "lucide-react";
 
 type ViewportMode = "desktop" | "tablet" | "mobile";
@@ -106,6 +110,7 @@ export default function VisualEditorPage({
   const [activeDynamicSection, setActiveDynamicSection] = useState<DynamicSection | null>(null);
   const [activeEntryForEdit, setActiveEntryForEdit] = useState<DynamicSectionEntry | null>(null);
   const [expandedSectionIds, setExpandedSectionIds] = useState<Record<string, boolean>>({});
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   // Load initial portfolio
   useEffect(() => {
@@ -338,6 +343,13 @@ export default function VisualEditorPage({
   const handleTogglePublish = async () => {
     if (!data) return;
     const nextState = !data.isPublished;
+
+    // Email verification requirement guard
+    if (nextState && user && !user.emailVerified) {
+      setShowVerificationModal(true);
+      return;
+    }
+
     const updated = {
       ...data,
       isPublished: nextState,
@@ -347,10 +359,10 @@ export default function VisualEditorPage({
     await savePortfolio(updated);
     setNotification(
       nextState
-        ? `Portfolio is now LIVE at /portfolio/${data.username}!`
+        ? `Portfolio is now LIVE at ${getPortfolioUrl(data.username)}!`
         : "Portfolio unpublished."
     );
-    setTimeout(() => setNotification(null), 4000);
+    setTimeout(() => setNotification(null), 5000);
   };
 
   if (loading || !data) {
@@ -462,8 +474,9 @@ export default function VisualEditorPage({
           </div>
 
           <Link
-            href={`/portfolio/${data.username}`}
+            href={getPortfolioUrl(data.username)}
             target="_blank"
+            rel="noopener noreferrer"
             className="hidden sm:inline-flex items-center space-x-1 border border-editorial-border bg-white px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal hover:bg-editorial-sand/30"
           >
             <span>Live URL</span>
@@ -1567,7 +1580,7 @@ export default function VisualEditorPage({
                     URL Slug
                   </label>
                   <div className="flex items-center mt-1">
-                    <span className="border border-r-0 border-editorial-border bg-editorial-sand/30 px-2 py-2 text-xs font-mono">
+                    <span className="border border-r-0 border-editorial-border bg-editorial-sand/30 px-2 py-2 text-xs font-mono text-editorial-muted">
                       /portfolio/
                     </span>
                     <input
@@ -1580,6 +1593,9 @@ export default function VisualEditorPage({
                       className="border border-editorial-border p-2 text-xs font-mono flex-grow"
                     />
                   </div>
+                  <p className="mt-1.5 text-[11px] font-mono text-editorial-muted truncate">
+                    Live Address: <span className="text-editorial-charcoal font-medium">{getDisplayPortfolioUrl(data.username)}</span>
+                  </p>
                 </div>
 
                 <div className="pt-4 border-t border-editorial-border">
@@ -1642,6 +1658,50 @@ export default function VisualEditorPage({
           entry={activeEntryForEdit}
           onSave={handleSaveDynamicEntry}
         />
+      )}
+
+      {/* Email Verification Required Modal */}
+      {showVerificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white border border-editorial-border shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-150">
+            <button
+              onClick={() => setShowVerificationModal(false)}
+              className="absolute top-4 right-4 text-editorial-muted hover:text-editorial-charcoal p-1 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-semibold text-editorial-charcoal">
+                  Email Verification Required
+                </h3>
+                <p className="text-xs font-mono text-editorial-muted">Security & Publishing Policy</p>
+              </div>
+            </div>
+            <p className="text-sm text-editorial-charcoal/80 leading-relaxed mb-6 font-sans">
+              To publish your website to the live domain, your account email (<strong className="font-semibold text-editorial-charcoal">{user?.email}</strong>) must be verified. This prevents spam and protects our platform domain reputation.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowVerificationModal(false)}
+                className="w-full sm:w-auto px-4 py-2 text-xs font-mono uppercase tracking-wider text-editorial-charcoal border border-editorial-border hover:bg-editorial-ivory transition-colors"
+              >
+                Cancel
+              </button>
+              <Link
+                href="/verify-email"
+                className="w-full sm:w-auto px-4 py-2 text-xs font-mono uppercase tracking-wider bg-editorial-charcoal text-editorial-ivory hover:bg-editorial-softdark transition-colors inline-flex items-center justify-center space-x-1.5"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                <span>Verify Email</span>
+              </Link>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

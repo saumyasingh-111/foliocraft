@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/portfolios";
 import { PortfolioData, ThemeId } from "@/themes/types";
 import { THEME_REGISTRY, INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
+import { getPortfolioUrl, getDisplayPortfolioUrl } from "@/lib/utils/url";
 import {
   Globe,
   Edit3,
@@ -65,7 +66,7 @@ export default function DashboardPage() {
   };
 
   const handleCopyUrl = (username: string, portfolioId: string) => {
-    const url = `${window.location.origin}/portfolio/${username}`;
+    const url = getPortfolioUrl(username);
     navigator.clipboard.writeText(url);
     setCopiedId(portfolioId);
     setTimeout(() => setCopiedId(null), 2500);
@@ -262,7 +263,7 @@ export default function DashboardPage() {
               <div className="flex items-center space-x-2 bg-editorial-ivory px-3.5 py-2 border border-editorial-border flex-grow text-xs font-mono text-editorial-charcoal overflow-hidden">
                 <Globe className="h-4 w-4 text-editorial-mocha flex-shrink-0" />
                 <span className="truncate">
-                  {typeof window !== "undefined" ? window.location.origin : ""}/portfolio/{primaryPortfolio.username}
+                  {getDisplayPortfolioUrl(primaryPortfolio.username)}
                 </span>
               </div>
             </div>
@@ -286,8 +287,9 @@ export default function DashboardPage() {
               </button>
 
               <Link
-                href={`/portfolio/${primaryPortfolio.username}`}
+                href={getPortfolioUrl(primaryPortfolio.username)}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center space-x-1.5 bg-editorial-charcoal px-3 py-2 text-xs font-mono uppercase tracking-wider text-editorial-ivory hover:bg-editorial-softdark transition-colors"
               >
                 <span>View Live</span>
@@ -449,8 +451,9 @@ export default function DashboardPage() {
                           <Copy className="h-3.5 w-3.5" />
                         </button>
                         <Link
-                          href={`/portfolio/${item.username}`}
+                          href={getPortfolioUrl(item.username)}
                           target="_blank"
+                          rel="noopener noreferrer"
                           title="Open Live Website"
                           className="p-1.5 text-editorial-muted hover:text-editorial-charcoal transition-colors border border-editorial-border"
                         >

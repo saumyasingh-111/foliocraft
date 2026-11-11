@@ -3,12 +3,17 @@ import {
   createUserWithEmailAndPassword,
   signOut as fbSignOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  applyActionCode,
+  checkActionCode,
+  ActionCodeSettings,
   updateProfile,
   User as FirebaseUser,
 } from "firebase/auth";
 import { getClientAuth, isFirebaseConfigured } from "./client";
 import { createOrUpdateUserProfile, getUserProfile, UserProfileDocument } from "./firestore";
 import { mapFirebaseAuthError } from "./auth-context";
+import { getAppBaseUrl } from "@/lib/utils/url";
 
 export interface SignUpResult {
   user: FirebaseUser;
@@ -177,5 +182,102 @@ export async function updateUserDisplayName(fullName: string): Promise<void> {
     });
   } catch (err) {
     throw new Error(mapFirebaseAuthError(err));
+  }
+}
+
+/**
+ * Dispatches Firebase native email verification with ActionCodeSettings pointing back to Vercel.
+ */
+export async function sendNativeEmailVerification(customUser?: FirebaseUser | null): Promise<void> {
+  const auth = getClientAuth();
+  if (!auth || !isFirebaseConfigured) {
+    throw new Error("Authentication service is not configured.");
+  }
+
+  const targetUser = customUser || auth.currentUser;
+  if (!targetUser) {
+    throw new Error("No active user session found to send verification email to.");
+  }
+
+  const baseUrl = getAppBaseUrl();
+  const actionCodeSettings: ActionCodeSettings = {
+    url: `${baseUrl}/verify-email`,
+    handleCodeInApp: true,
+  };
+
+  try {
+    await sendEmailVerification(targetUser, actionCodeSettings);
+  } catch (err: unknown) {
+    console.error("[FirebaseAuth] Failed to send verification email:", err);
+    throw new Error(mapFirebaseAuthError(err));
+  }
+}
+
+export interface VerifyActionCodeResult {
+  success: boolean;
+  email?: string;
+  error?: string;
+  code?: string;
+}
+
+/**
+ * Validates and applies a Firebase verification action code (oobCode).
+ */
+export async function verifyEmailActionCode(oobCode: string): Promise<VerifyActionCodeResult> {
+  const auth = getClientAuth();
+  if (!auth || !isFirebaseConfigured) {
+    return {
+      success: false,
+      error: "Authentication service is not configured.",
+      code: "auth/not-configured",
+    };
+  }
+
+  try {
+    // 1. Check the action code first to get the associated email
+    const info = await checkActionCode(auth, oobCode);
+    const verifiedEmail = info.data.email || undefined;
+
+    // 2. Apply the action code (sets emailVerified: true on Firebase account)
+    await applyActionCode(auth, oobCode);
+
+    // 3. If user is currently signed in on this client, reload their profile
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      try {
+        await createOrUpdateUserProfile(auth.currentUser.uid, {
+          emailVerified: true,
+        });
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    return {
+      success: true,
+      email: verifiedEmail,
+    };
+  } catch (err: unknown) {
+    console.error("[FirebaseAuth] applyActionCode error:", err);
+    const errCode = (err && typeof err === "object" && "code" in err)
+      ? (err as { code: string }).code
+      : "auth/unknown";
+
+    let message = "Failed to verify email. The link may be invalid or expired.";
+    if (errCode === "auth/expired-action-code") {
+      message = "This verification link has expired. Verification links are time-limited for security.";
+    } else if (errCode === "auth/invalid-action-code") {
+      message = "This verification link is invalid or has already been used. If you have already verified, please sign in.";
+    } else if (errCode === "auth/user-disabled") {
+      message = "This user account has been disabled. Please contact support.";
+    } else if (errCode === "auth/user-not-found") {
+      message = "The user corresponding to this code was not found.";
+    }
+
+    return {
+      success: false,
+      error: message,
+      code: errCode,
+    };
   }
 }

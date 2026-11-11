@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/lib/firebase/auth-context";
 import { ArrowRight, Menu, X, Sparkles, LayoutDashboard, User } from "lucide-react";
 
@@ -14,9 +15,14 @@ export function Navbar() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-12">
         {/* Brand Logo */}
         <Link href="/" className="group flex items-center space-x-2.5">
-          <div className="flex h-9 w-9 items-center justify-center border border-editorial-charcoal bg-editorial-charcoal text-editorial-ivory transition-transform group-hover:scale-105">
-            <span className="font-serif text-lg font-bold">F</span>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="FolioCraft"
+            width={36}
+            height={36}
+            className="h-9 w-9 object-contain rounded-sm transition-transform group-hover:scale-105"
+            priority
+          />
           <div className="flex flex-col">
             <span className="font-serif text-xl tracking-tight font-semibold text-editorial-charcoal">
               FolioCraft

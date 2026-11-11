@@ -17,6 +17,7 @@ import {
   signUpUser,
   signOutUser,
   sendUserPasswordReset,
+  sendNativeEmailVerification,
   retryProfileSetup,
   SignUpResult,
 } from "./auth";
@@ -27,6 +28,7 @@ export interface AuthUser {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+  emailVerified: boolean;
 }
 
 interface AuthContextType {
@@ -40,6 +42,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   completeProfileRecovery: (name?: string) => Promise<void>;
+  reloadUser: () => Promise<void>;
+  sendVerificationEmail: (customUser?: FirebaseUser | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -116,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: fbUser.email,
             displayName: fbUser.displayName || fbUser.email?.split("@")[0] || "User",
             photoURL: fbUser.photoURL,
+            emailVerified: Boolean(fbUser.emailVerified),
           });
         } else {
           setUser(null);
@@ -141,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: credUser.email,
       displayName: credUser.displayName || credUser.email?.split("@")[0] || "User",
       photoURL: credUser.photoURL,
+      emailVerified: Boolean(credUser.emailVerified),
     });
     return credUser;
   };
@@ -153,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: result.user.email,
       displayName: result.user.displayName || name || "User",
       photoURL: null,
+      emailVerified: Boolean(result.user.emailVerified),
     });
     return result;
   };
@@ -167,6 +174,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await sendUserPasswordReset(email);
   };
 
+  const reloadUser = async (): Promise<void> => {
+    const auth = getClientAuth();
+    const current = auth?.currentUser || rawUser;
+    if (current) {
+      await current.reload();
+      setRawUser(current);
+      setUser({
+        uid: current.uid,
+        email: current.email,
+        displayName: current.displayName || current.email?.split("@")[0] || "User",
+        photoURL: current.photoURL,
+        emailVerified: Boolean(current.emailVerified),
+      });
+    }
+  };
+
+  const sendVerificationEmail = async (customUser?: FirebaseUser | null): Promise<void> => {
+    const auth = getClientAuth();
+    const target = customUser || auth?.currentUser || rawUser;
+    if (!target) {
+      throw new Error("No active user session to send verification email to.");
+    }
+    await sendNativeEmailVerification(target);
+  };
+
   const completeProfileRecovery = async (name?: string): Promise<void> => {
     const auth = getClientAuth();
     const currentUser = auth?.currentUser || rawUser;
@@ -179,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: currentUser.email,
       displayName: name || currentUser.displayName || "User",
       photoURL: currentUser.photoURL,
+      emailVerified: Boolean(currentUser.emailVerified),
     });
   };
 
@@ -195,6 +228,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         resetPassword,
         completeProfileRecovery,
+        reloadUser,
+        sendVerificationEmail,
       }}
     >
       {children}

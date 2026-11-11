@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/shared/Footer";
 import { THEME_REGISTRY } from "@/lib/utils/defaults";
-import { ThemeId } from "@/themes/types";
 import {
   ArrowRight,
   Sparkles,
@@ -24,10 +23,6 @@ import {
 } from "lucide-react";
 
 export default function LandingPage() {
-  const [activeHeroTheme, setActiveHeroTheme] = useState<ThemeId>("minimal-editorial");
-
-  const currentThemeMeta = THEME_REGISTRY.find((t) => t.id === activeHeroTheme) || THEME_REGISTRY[0];
-
   return (
     <div id="top" className="min-h-screen flex flex-col bg-editorial-ivory text-editorial-charcoal selection:bg-editorial-charcoal selection:text-editorial-ivory">
       <Navbar />
@@ -37,183 +32,51 @@ export default function LandingPage() {
             1. HERO SECTION
         ========================================================================== */}
         <section className="relative overflow-hidden border-b border-editorial-border py-20 lg:py-28">
-          <div className="mx-auto max-w-7xl px-6 lg:px-12">
-            <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-12">
-              
-              {/* Left Column: Editorial Headline & Actions */}
-              <div className="lg:col-span-6 space-y-8">
-                <div className="inline-flex items-center space-x-2 border border-editorial-border bg-editorial-sand/30 px-3.5 py-1.5 text-xs font-mono tracking-widest uppercase text-editorial-charcoal">
-                  <span className="h-1.5 w-1.5 rounded-full bg-editorial-mocha animate-pulse" />
-                  <span>No-Code Portfolio Publishing Platform</span>
-                </div>
+          <div className="mx-auto max-w-4xl px-6 lg:px-12 text-center flex flex-col items-center space-y-8">
 
-                <div className="space-y-4">
-                  <h1 className="font-serif text-5xl font-normal tracking-tight text-editorial-charcoal sm:text-6xl lg:text-7xl leading-[1.08]">
-                    Your story <br />
-                    <span className="italic font-light text-editorial-mocha">deserves</span> its own website.
-                  </h1>
-                  <p className="max-w-xl text-lg text-editorial-charcoal/80 leading-relaxed font-sans font-light">
-                    Create a portfolio that reflects who you are. Choose your style, showcase your work, and publish your personal website in minutes.
-                  </p>
-                </div>
+            <div className="space-y-4">
+              <h1 className="font-serif text-5xl font-normal tracking-tight text-editorial-charcoal sm:text-6xl lg:text-7xl leading-[1.08]">
+                Your story <br />
+                <span className="italic font-light text-editorial-mocha">deserves</span> its own website.
+              </h1>
+              <p className="max-w-2xl mx-auto text-lg text-editorial-charcoal/80 leading-relaxed font-sans font-light">
+                Create a portfolio that reflects who you are. Choose your style, showcase your work, and publish your personal website in minutes.
+              </p>
+            </div>
 
-                {/* Primary & Secondary Actions */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
-                  <Link
-                    href="/signup"
-                    className="group inline-flex items-center justify-center space-x-2.5 border border-editorial-charcoal bg-editorial-charcoal px-7 py-4 text-sm font-medium text-editorial-ivory transition-all hover:bg-editorial-softdark hover:shadow-editorial"
-                  >
-                    <span>Create Your Portfolio</span>
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </Link>
+            {/* Primary & Secondary Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
+              <Link
+                href="/signup"
+                className="group inline-flex items-center justify-center space-x-2.5 border border-editorial-charcoal bg-editorial-charcoal px-7 py-4 text-sm font-medium text-editorial-ivory transition-all hover:bg-editorial-softdark hover:shadow-editorial"
+              >
+                <span>Create Your Portfolio</span>
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Link>
 
-                  <Link
-                    href="#themes"
-                    className="inline-flex items-center justify-center space-x-2 border border-editorial-border bg-editorial-card px-6 py-4 text-sm font-medium text-editorial-charcoal transition-colors hover:bg-editorial-sand/40 hover:border-editorial-mocha"
-                  >
-                    <Eye className="h-4 w-4 text-editorial-mocha" />
-                    <span>Explore Themes</span>
-                  </Link>
-                </div>
+              <Link
+                href="#themes"
+                className="inline-flex items-center justify-center space-x-2 border border-editorial-border bg-editorial-card px-6 py-4 text-sm font-medium text-editorial-charcoal transition-colors hover:bg-editorial-sand/40 hover:border-editorial-mocha"
+              >
+                <Eye className="h-4 w-4 text-editorial-mocha" />
+                <span>Explore Themes</span>
+              </Link>
+            </div>
 
-                {/* Micro guarantees */}
-                <div className="flex flex-wrap items-center gap-y-2 gap-x-6 pt-4 text-xs font-mono text-editorial-muted">
-                  <span className="flex items-center space-x-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-editorial-mocha" />
-                    <span>Zero code required</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-editorial-mocha" />
-                    <span>Instant public URL</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-editorial-mocha" />
-                    <span>6 bespoke archetypes</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Right Column: Live Interactive Theme Preview Mockup */}
-              <div className="lg:col-span-6">
-                <div className="relative border border-editorial-charcoal/20 bg-white p-4 sm:p-6 shadow-editorial-lg">
-                  
-                  {/* Top Bar with live theme pill switcher */}
-                  <div className="mb-4 flex flex-wrap items-center justify-between border-b border-editorial-border pb-3 gap-2">
-                    <div className="flex items-center space-x-2">
-                      <span className="h-3 w-3 rounded-full bg-red-400" />
-                      <span className="h-3 w-3 rounded-full bg-amber-400" />
-                      <span className="h-3 w-3 rounded-full bg-emerald-400" />
-                      <span className="ml-2 text-xs font-mono text-editorial-muted">
-                        alex-morgan.foliocraft.com
-                      </span>
-                    </div>
-
-                    <div className="flex items-center space-x-1 text-xs">
-                      <span className="text-[11px] font-mono text-editorial-mocha mr-1 hidden sm:inline">
-                        Theme:
-                      </span>
-                      <select
-                        value={activeHeroTheme}
-                        onChange={(e) => setActiveHeroTheme(e.target.value as ThemeId)}
-                        className="rounded border border-editorial-border bg-editorial-ivory px-2 py-1 text-xs font-medium text-editorial-charcoal focus:outline-none"
-                      >
-                        {THEME_REGISTRY.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Interactive Miniature Portfolio Surface */}
-                  <div
-                    className="relative min-h-[380px] p-6 transition-all duration-300 border border-editorial-border/60"
-                    style={{
-                      backgroundColor: currentThemeMeta.defaultSettings.palette.background,
-                      color: currentThemeMeta.defaultSettings.palette.text,
-                    }}
-                  >
-                    {/* Header in simulated portfolio */}
-                    <div className="flex items-center justify-between border-b pb-4 mb-6" style={{ borderColor: currentThemeMeta.defaultSettings.palette.border }}>
-                      <span className="text-sm font-semibold tracking-wider uppercase font-mono">
-                        Alex Morgan
-                      </span>
-                      <div className="flex space-x-4 text-xs opacity-75 font-mono">
-                        <span>Works</span>
-                        <span>Experience</span>
-                        <span>Contact</span>
-                      </div>
-                    </div>
-
-                    {/* Hero body */}
-                    <div className="space-y-4 max-w-md">
-                      <div className="inline-block px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest"
-                           style={{
-                             backgroundColor: currentThemeMeta.defaultSettings.palette.surface,
-                             color: currentThemeMeta.defaultSettings.palette.primary,
-                             border: `1px solid ${currentThemeMeta.defaultSettings.palette.border}`
-                           }}>
-                        {currentThemeMeta.category} Portfolio
-                      </div>
-                      
-                      <h3 className="text-2xl sm:text-3xl font-serif font-normal leading-snug">
-                        {currentThemeMeta.id === "modern-developer" ? (
-                          <span className="font-mono text-xl sm:text-2xl font-bold">
-                            &gt; Full-Stack Architect & Open Source Contributor_
-                          </span>
-                        ) : currentThemeMeta.id === "creative-experimental" ? (
-                          <span className="font-mono uppercase tracking-tight font-black text-2xl">
-                            Visual Director // Breaking Digital Conventions
-                          </span>
-                        ) : (
-                          <span>Designing digital artifacts with quiet precision and enduring clarity.</span>
-                        )}
-                      </h3>
-
-                      <p className="text-xs leading-relaxed opacity-80">
-                        {currentThemeMeta.description}
-                      </p>
-                    </div>
-
-                    {/* Simulated Project Card */}
-                    <div className="mt-6 grid grid-cols-2 gap-3">
-                      <div className="p-3 border text-xs" style={{
-                        backgroundColor: currentThemeMeta.defaultSettings.palette.surface,
-                        borderColor: currentThemeMeta.defaultSettings.palette.border
-                      }}>
-                        <div className="text-[10px] uppercase font-mono opacity-60">Featured Work</div>
-                        <div className="font-semibold text-xs mt-1">Chronicle Publishing</div>
-                        <div className="text-[10px] opacity-75 mt-0.5">Next.js & Typography</div>
-                      </div>
-                      <div className="p-3 border text-xs" style={{
-                        backgroundColor: currentThemeMeta.defaultSettings.palette.surface,
-                        borderColor: currentThemeMeta.defaultSettings.palette.border
-                      }}>
-                        <div className="text-[10px] uppercase font-mono opacity-60">Interaction</div>
-                        <div className="font-semibold text-xs mt-1">Vesper Audio Labs</div>
-                        <div className="text-[10px] opacity-75 mt-0.5">Spatial Audio System</div>
-                      </div>
-                    </div>
-
-                    {/* Subtle caption */}
-                    <div className="mt-6 flex items-center justify-between text-[11px] opacity-70 font-mono">
-                      <span>Live Style: {currentThemeMeta.name}</span>
-                      <span className="italic">1-click theme switching</span>
-                    </div>
-                  </div>
-
-                  {/* Mock browser status */}
-                  <div className="mt-3 flex items-center justify-between text-xs text-editorial-muted font-mono">
-                    <span className="flex items-center space-x-1">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      <span>Ready to Publish</span>
-                    </span>
-                    <span>100% Responsive</span>
-                  </div>
-                </div>
-              </div>
-
+            {/* Micro guarantees */}
+            <div className="flex flex-wrap items-center justify-center gap-y-2 gap-x-6 pt-4 text-xs font-mono text-editorial-muted">
+              <span className="flex items-center space-x-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-editorial-mocha" />
+                <span>Zero code required</span>
+              </span>
+              <span className="flex items-center space-x-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-editorial-mocha" />
+                <span>Instant public URL</span>
+              </span>
+              <span className="flex items-center space-x-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-editorial-mocha" />
+                <span>6 bespoke archetypes</span>
+              </span>
             </div>
           </div>
         </section>
@@ -221,10 +84,10 @@ export default function LandingPage() {
         {/* =========================================================================
             2. THEME SHOWCASE GALLERY (THE 6 ARCHETYPES)
         ========================================================================== */}
-        <section id="themes" className="border-b border-editorial-border py-24 bg-editorial-ivory">
+        <section id="themes" className="border-b border-editorial-border py-20 bg-editorial-ivory">
           <div className="mx-auto max-w-7xl px-6 lg:px-12">
             
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
               <div className="space-y-3">
                 <span className="text-xs font-mono uppercase tracking-widest text-editorial-mocha font-semibold">
                   Theme Architecture
@@ -233,7 +96,7 @@ export default function LandingPage() {
                   Six genuinely distinct aesthetics.
                 </h2>
                 <p className="max-w-2xl text-base text-editorial-charcoal/70 font-sans">
-                  We don’t simply swap background colors. Each theme features bespoke layouts, unique typographic pairings, custom section treatments, and distinct visual personality.
+                  Choose an archetype that fits your discipline, fully customizable inside the Visual Studio editor.
                 </p>
               </div>
 
@@ -246,91 +109,27 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            {/* Grid of 6 Themes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {THEME_REGISTRY.map((theme) => {
-                const palette = theme.defaultSettings.palette;
-                return (
-                  <div
-                    key={theme.id}
-                    className="group flex flex-col border border-editorial-border bg-editorial-card transition-all duration-300 hover:border-editorial-charcoal hover:shadow-editorial-lg"
-                  >
-                    {/* Visual Card Preview */}
-                    <div
-                      className="relative h-56 p-6 border-b flex flex-col justify-between overflow-hidden"
-                      style={{
-                        backgroundColor: palette.background,
-                        borderColor: palette.border,
-                        color: palette.text,
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span
-                          className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider"
-                          style={{
-                            backgroundColor: palette.surface,
-                            color: palette.primary,
-                            border: `1px solid ${palette.border}`,
-                          }}
-                        >
-                          {theme.category}
-                        </span>
-                        <div className="flex space-x-1.5">
-                          <span
-                            className="h-3 w-3 rounded-full border border-black/10"
-                            style={{ backgroundColor: palette.primary }}
-                          />
-                          <span
-                            className="h-3 w-3 rounded-full border border-black/10"
-                            style={{ backgroundColor: palette.secondary }}
-                          />
-                          <span
-                            className="h-3 w-3 rounded-full border border-black/10"
-                            style={{ backgroundColor: palette.accent }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 my-auto">
-                        <h4 className="text-xl font-medium tracking-tight" style={{ fontFamily: theme.defaultSettings.typography.headingFont }}>
-                          {theme.name}
-                        </h4>
-                        <p className="text-xs opacity-75 line-clamp-2">
-                          {theme.tagline}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between text-[11px] font-mono opacity-60 pt-2 border-t" style={{ borderColor: palette.border }}>
-                        <span>Heading: {theme.defaultSettings.typography.headingFont}</span>
-                        <span>Body: {theme.defaultSettings.typography.bodyFont}</span>
-                      </div>
-                    </div>
-
-                    {/* Card Content & Details */}
-                    <div className="p-6 flex-grow flex flex-col justify-between space-y-4">
-                      <div className="space-y-2">
-                        <p className="text-sm text-editorial-charcoal/80 leading-relaxed font-sans">
-                          {theme.description}
-                        </p>
-                        <div className="pt-2 text-xs text-editorial-muted">
-                          <span className="font-semibold text-editorial-charcoal font-mono">Best for: </span>
-                          <span>{theme.bestFor}</span>
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t border-editorial-border/60 flex items-center justify-between">
-                        <Link
-                          href={`/signup?theme=${theme.id}`}
-                          className="inline-flex items-center space-x-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal hover:text-editorial-mocha font-semibold transition-colors"
-                        >
-                          <span>Select this theme</span>
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </div>
-                    </div>
+            {/* Simply Mention All 6 Themes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {THEME_REGISTRY.map((theme, idx) => (
+                <Link
+                  key={theme.id}
+                  href={`/signup?theme=${theme.id}`}
+                  className="group flex items-center justify-between border border-editorial-border bg-white p-5 transition-all hover:border-editorial-charcoal hover:shadow-editorial"
+                >
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-editorial-muted">
+                      0{idx + 1} &bull; {theme.category}
+                    </span>
+                    <h3 className="font-serif text-lg font-medium text-editorial-charcoal group-hover:text-editorial-mocha transition-colors">
+                      {theme.name}
+                    </h3>
                   </div>
-                );
-              })}
+                  <div className="flex items-center space-x-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal opacity-70 group-hover:opacity-100 transition-opacity">
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </Link>
+              ))}
             </div>
 
           </div>

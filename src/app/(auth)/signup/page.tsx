@@ -2,6 +2,7 @@
 
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/firebase/auth-context";
 import { ArrowRight, Lock, Mail, User, AlertCircle, AlertTriangle, RefreshCw } from "lucide-react";
@@ -11,7 +12,13 @@ function SignupContent() {
   const searchParams = useSearchParams();
   const preselectedTheme = searchParams.get("theme");
 
-  const { signup, isConfigured, missingConfig, completeProfileRecovery } = useAuth();
+  const {
+    signup,
+    isConfigured,
+    missingConfig,
+    completeProfileRecovery,
+    sendVerificationEmail,
+  } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -53,10 +60,16 @@ function SignupContent() {
     setSubmitting(true);
 
     try {
-      await signup(email, password, name);
-      const target = preselectedTheme
-        ? `/onboarding?theme=${preselectedTheme}`
-        : "/onboarding";
+      const result = await signup(email, password, name);
+      try {
+        await sendVerificationEmail(result.user);
+      } catch (vErr) {
+        console.warn("[Signup] Verification email auto-send failed:", vErr);
+      }
+
+      const target = `/verify-email?pending=true&email=${encodeURIComponent(email.trim())}${
+        preselectedTheme ? `&theme=${encodeURIComponent(preselectedTheme)}` : ""
+      }`;
       router.push(target);
     } catch (err: unknown) {
       console.error("[Signup Error Caught]:", err);
@@ -101,10 +114,15 @@ function SignupContent() {
     <div className="min-h-screen bg-editorial-ivory flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link href="/" className="inline-flex items-center space-x-2">
-          <div className="flex h-9 w-9 items-center justify-center bg-editorial-charcoal text-editorial-ivory font-serif font-bold text-lg">
-            F
-          </div>
+        <Link href="/" className="inline-flex items-center space-x-2.5">
+          <Image
+            src="/logo.png"
+            alt="FolioCraft"
+            width={40}
+            height={40}
+            className="h-10 w-10 object-contain rounded-sm"
+            priority
+          />
           <span className="font-serif text-2xl tracking-tight font-semibold text-editorial-charcoal">
             FolioCraft
           </span>
