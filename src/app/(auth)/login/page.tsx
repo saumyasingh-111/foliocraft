@@ -17,6 +17,8 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+
     if (!email.trim() || !password) {
       setError("Please enter both email and password.");
       return;
@@ -35,6 +37,7 @@ export default function LoginPage() {
       await login(email, password);
       router.push("/dashboard");
     } catch (err: unknown) {
+      console.error("[Login Error]:", err);
       const msg = err instanceof Error ? err.message : "Failed to sign in. Please check credentials.";
       setError(msg);
     } finally {
@@ -141,7 +144,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={submitting || loading}
+              disabled={submitting}
               className="w-full mt-6 flex items-center justify-center space-x-2 bg-editorial-charcoal py-3 px-4 text-sm font-medium text-editorial-ivory hover:bg-editorial-softdark transition-colors disabled:opacity-50"
             >
               <span>{submitting ? "Signing in..." : "Sign In"}</span>

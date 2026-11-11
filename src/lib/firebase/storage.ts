@@ -1,79 +1,114 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+/**
+ * Optional Firebase Storage Provider
+ * 
+ * Provides an implementation of the MediaService StorageProvider interface.
+ * Only activated if a Firebase Storage bucket is configured and available (e.g. on Blaze plan).
+ * On Spark free plans without billing, this provider is inactive and FolioCraft operates
+ * in No-Cost Hosted Mode with external URLs and session previews.
+ */
+
+import {
+  ref,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import { getClientStorage, isFirebaseConfigured } from "./client";
+import { StorageProvider } from "../media/mediaService";
 
-export type UploadCategory = "avatars" | "projects" | "resumes" | "gallery" | "certificates";
+export type UploadCategory =
+  | "profile"
+  | "avatars"
+  | "projects"
+  | "resume"
+  | "resumes"
+  | "certificates"
+  | "gallery";
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
-const ALLOWED_DOCUMENT_TYPES = ["application/pdf"];
+export class FirebaseStorageProvider implements StorageProvider {
+  name = "Firebase Storage (Blaze Cloud)";
 
-const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
-const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
-
-export async function uploadMediaToStorage(
-  file: File,
-  userId: string,
-  portfolioId: string,
-  category: UploadCategory
-): Promise<string> {
-  if (!isFirebaseConfigured) {
-    throw new Error("Firebase Storage is not configured. Please check your environment variables.");
+  isAvailable(): boolean {
+    return Boolean(getClientStorage() && isFirebaseConfigured);
   }
 
-  const storage = getClientStorage();
-  if (!storage) {
-    throw new Error("Unable to initialize Firebase Storage client.");
-  }
+  async upload(
+    file: File,
+    path: string,
+    onProgress?: (percent: number) => void
+  ): Promise<string> {
+    const storage = getClientStorage();
+    if (!storage) {
+      throw new Error(
+        "Firebase Storage is unavailable on the current plan. Please use hosted image URLs."
+      );
+    }
 
-  // 1. Validation: File Type & Size
-  if (category === "resumes") {
-    if (!ALLOWED_DOCUMENT_TYPES.includes(file.type) && !file.name.toLowerCase().endsWith(".pdf")) {
-      throw new Error("Invalid document format. Please upload a PDF file.");
-    }
-    if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
-      throw new Error("Resume PDF exceeds the 10MB limit.");
-    }
-  } else {
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      throw new Error("Invalid image format. Supported formats: JPG, PNG, WebP, GIF, SVG.");
-    }
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      throw new Error("Image exceeds the 5MB size limit.");
-    }
-  }
+    const storageRef = ref(storage, path);
 
-  // 2. Sanitize file name & generate scoped path
-  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const uniqueName = `${Date.now()}_${sanitizedFilename}`;
-  const storagePath = `users/${userId}/portfolios/${portfolioId}/${category}/${uniqueName}`;
+    if (onProgress) {
+      return new Promise<string>((resolve, reject) => {
+        const uploadTask = uploadBytesResumable(storageRef, file, {
+          contentType: file.type,
+        });
 
-  try {
-    const storageRef = ref(storage, storagePath);
+        uploadTask.on(
+          "state_changed",
+          (snap) => {
+            const percent = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+            onProgress(percent);
+          },
+          (err) => reject(err),
+          async () => {
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+            } catch (err) {
+              reject(err);
+            }
+          }
+        );
+      });
+    }
+
     const snapshot = await uploadBytes(storageRef, file, {
       contentType: file.type,
-      customMetadata: {
-        userId,
-        portfolioId,
-        uploadedAt: new Date().toISOString(),
-      },
     });
+    return await getDownloadURL(snapshot.ref);
+  }
 
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-    return downloadUrl;
-  } catch (err: unknown) {
-    console.error("Firebase Storage upload error:", err);
-    const message = err instanceof Error ? err.message : "Failed to upload file to storage.";
-    throw new Error(`Upload failed: ${message}`);
+  async delete(path: string): Promise<void> {
+    const storage = getClientStorage();
+    if (!storage) return;
+    try {
+      const storageRef = ref(storage, path);
+      await deleteObject(storageRef);
+    } catch {
+      // Ignore if already deleted
+    }
   }
 }
 
-export async function deleteMediaFromStorage(fileUrl: string): Promise<void> {
-  const storage = getClientStorage();
-  if (!storage || !isFirebaseConfigured) return;
-
-  try {
-    const storageRef = ref(storage, fileUrl);
-    await deleteObject(storageRef);
-  } catch (err) {
-    console.warn("Could not delete file from storage:", err);
+/**
+ * Legacy helper if directly invoked; gracefully errors on unconfigured storage
+ */
+export async function uploadMediaToStorage(
+  file: File,
+  userId: string,
+  portfolioId?: string,
+  category: UploadCategory = "projects"
+): Promise<string> {
+  const provider = new FirebaseStorageProvider();
+  if (!provider.isAvailable()) {
+    throw new Error(
+      "Firebase Storage is not available on this plan. Use hosted image URLs or local session previews."
+    );
   }
+  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const uniqueName = `${Date.now()}_${sanitizedFilename}`;
+  const path = portfolioId
+    ? `users/${userId}/portfolios/${portfolioId}/${category}/${uniqueName}`
+    : `users/${userId}/${category}/${uniqueName}`;
+  return await provider.upload(file, path);
 }

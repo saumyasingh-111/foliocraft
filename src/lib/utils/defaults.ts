@@ -467,4 +467,8 @@ export const INITIAL_DEFAULT_PORTFOLIO: PortfolioData = {
     personalWebsite: "https://morgan.design",
     email: "alex@morgan.design",
   },
+  resumeUrl: null,
+  resumeURL: null,
+  profileImage: null,
+  dynamicSections: [],
 };

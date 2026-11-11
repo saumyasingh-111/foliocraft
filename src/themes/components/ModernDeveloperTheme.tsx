@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PortfolioData } from "../types";
+import { DynamicSectionRenderer } from "@/components/sections/DynamicSectionRenderer";
 import {
   Terminal,
   Code2,
@@ -19,7 +20,7 @@ interface ThemeProps {
   previewMode?: boolean;
 }
 
-export function ModernDeveloperTheme({ data }: ThemeProps) {
+export function ModernDeveloperTheme({ data, previewMode }: ThemeProps) {
   const { personalInfo, about, projects, experience, education, skills, achievements, socialLinks, resumeUrl } = data;
 
   return (
@@ -66,16 +67,27 @@ export function ModernDeveloperTheme({ data }: ThemeProps) {
             <span>system_status: {personalInfo.statusBadge || "ready_for_production"}</span>
           </div>
 
-          <div className="space-y-3">
-            <div className="text-theme-primary text-sm font-semibold">
-              $ whoami --verbose
+          <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+            {personalInfo.avatarUrl && (
+              <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full overflow-hidden border-2 border-theme-primary/60 bg-theme-surface flex-shrink-0">
+                <img
+                  src={personalInfo.avatarUrl}
+                  alt={personalInfo.fullName}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <div className="text-theme-primary text-sm font-semibold">
+                $ whoami --verbose
+              </div>
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white font-mono">
+                {personalInfo.fullName}
+              </h1>
+              <p className="text-base sm:text-xl text-theme-secondary font-medium">
+                {personalInfo.professionalTitle}
+              </p>
             </div>
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white font-mono">
-              {personalInfo.fullName}
-            </h1>
-            <p className="text-base sm:text-xl text-theme-secondary font-medium">
-              {personalInfo.professionalTitle}
-            </p>
           </div>
 
           <p className="text-sm text-theme-muted max-w-2xl leading-relaxed pt-2">
@@ -270,6 +282,18 @@ export function ModernDeveloperTheme({ data }: ThemeProps) {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Dynamic Custom Sections */}
+      {data.dynamicSections && data.dynamicSections.length > 0 && (
+        <>
+          {data.dynamicSections
+            .filter((sec) => sec.isVisible)
+            .sort((a, b) => a.order - b.order)
+            .map((sec) => (
+              <DynamicSectionRenderer key={sec.id} section={sec} previewMode={previewMode} />
+            ))}
+        </>
       )}
 
       {/* Footer */}

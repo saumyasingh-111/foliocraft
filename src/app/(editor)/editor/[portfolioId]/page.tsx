@@ -9,7 +9,7 @@ import {
   savePortfolio,
   checkUsernameAvailability,
 } from "@/lib/db/portfolios";
-import { uploadPortfolioMedia } from "@/lib/db/storage";
+import { MediaAssetControl } from "@/components/shared/MediaAssetControl";
 import { ThemeRenderer } from "@/themes/ThemeRenderer";
 import {
   PortfolioData,
@@ -19,7 +19,12 @@ import {
   EducationItem,
   SkillItem,
   SectionConfig,
+  DynamicSection,
+  DynamicSectionEntry,
+  DynamicSectionLayout,
 } from "@/themes/types";
+import { SectionBuilderModal } from "@/components/sections/SectionBuilderModal";
+import { DynamicEntryEditorModal } from "@/components/sections/DynamicEntryEditorModal";
 import {
   THEME_REGISTRY,
   PRESET_COLOR_PALETTES,
@@ -55,6 +60,11 @@ import {
   ChevronRight,
   ChevronDown,
   Clock,
+  ArrowUp,
+  ArrowDown,
+  Copy,
+  Edit3,
+  Wand2,
 } from "lucide-react";
 
 type ViewportMode = "desktop" | "tablet" | "mobile";
@@ -89,7 +99,13 @@ export default function VisualEditorPage({
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Dynamic Section Builder States
+  const [isSectionBuilderOpen, setIsSectionBuilderOpen] = useState(false);
+  const [isEntryEditorOpen, setIsEntryEditorOpen] = useState(false);
+  const [activeDynamicSection, setActiveDynamicSection] = useState<DynamicSection | null>(null);
+  const [activeEntryForEdit, setActiveEntryForEdit] = useState<DynamicSectionEntry | null>(null);
+  const [expandedSectionIds, setExpandedSectionIds] = useState<Record<string, boolean>>({});
 
   // Load initial portfolio
   useEffect(() => {
@@ -138,9 +154,11 @@ export default function VisualEditorPage({
         try {
           await savePortfolio(next);
           setSaveStatus("saved");
-        } catch (err) {
+        } catch (err: any) {
           console.error("Auto-save error:", err);
           setSaveStatus("unsaved");
+          setNotification(err?.message || "Failed to auto-save changes.");
+          setTimeout(() => setNotification(null), 4000);
         }
       }, 1200);
 
@@ -178,10 +196,143 @@ export default function VisualEditorPage({
       setSaveStatus("saved");
       setNotification("All changes safely saved.");
       setTimeout(() => setNotification(null), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Manual save failed:", err);
       setSaveStatus("unsaved");
+      setNotification(err?.message || "Failed to save changes.");
+      setTimeout(() => setNotification(null), 4000);
     }
+  };
+
+  // Dynamic Section Handlers
+  const handleAddDynamicSection = (newSection: DynamicSection) => {
+    updateData((prev) => ({
+      ...prev,
+      dynamicSections: [...(prev.dynamicSections || []), newSection],
+    }));
+    setNotification(`Added section: ${newSection.title}`);
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleToggleDynamicSectionVisibility = (sectionId: string) => {
+    updateData((prev) => ({
+      ...prev,
+      dynamicSections: (prev.dynamicSections || []).map((s) =>
+        s.id === sectionId ? { ...s, isVisible: !s.isVisible } : s
+      ),
+    }));
+  };
+
+  const handleReorderDynamicSection = (sectionId: string, direction: "up" | "down") => {
+    updateData((prev) => {
+      const list = [...(prev.dynamicSections || [])];
+      const index = list.findIndex((s) => s.id === sectionId);
+      if (index < 0) return prev;
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= list.length) return prev;
+
+      const temp = list[index];
+      list[index] = list[targetIndex];
+      list[targetIndex] = temp;
+
+      const reindexed = list.map((s, idx) => ({ ...s, order: idx + 1 }));
+      return { ...prev, dynamicSections: reindexed };
+    });
+  };
+
+  const handleUpdateDynamicSectionLayout = (sectionId: string, layout: DynamicSectionLayout) => {
+    updateData((prev) => ({
+      ...prev,
+      dynamicSections: (prev.dynamicSections || []).map((s) =>
+        s.id === sectionId ? { ...s, layout } : s
+      ),
+    }));
+  };
+
+  const handleDuplicateDynamicSection = (sectionId: string) => {
+    updateData((prev) => {
+      const match = (prev.dynamicSections || []).find((s) => s.id === sectionId);
+      if (!match) return prev;
+      const copy: DynamicSection = {
+        ...match,
+        id: `sec_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+        title: `${match.title} (Copy)`,
+        order: (prev.dynamicSections || []).length + 1,
+        entries: (match.entries || []).map((e, idx) => ({
+          ...e,
+          id: `entry_${Date.now().toString(36)}_${idx}`,
+        })),
+      };
+      return {
+        ...prev,
+        dynamicSections: [...(prev.dynamicSections || []), copy],
+      };
+    });
+    setNotification("Section duplicated");
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleDeleteDynamicSection = (sectionId: string) => {
+    if (!confirm("Are you sure you want to delete this section and all its entries?")) return;
+    updateData((prev) => ({
+      ...prev,
+      dynamicSections: (prev.dynamicSections || []).filter((s) => s.id !== sectionId),
+    }));
+    setNotification("Section deleted");
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleOpenAddEntryModal = (section: DynamicSection) => {
+    setActiveDynamicSection(section);
+    setActiveEntryForEdit(null);
+    setIsEntryEditorOpen(true);
+  };
+
+  const handleOpenEditEntryModal = (section: DynamicSection, entry: DynamicSectionEntry) => {
+    setActiveDynamicSection(section);
+    setActiveEntryForEdit(entry);
+    setIsEntryEditorOpen(true);
+  };
+
+  const handleSaveDynamicEntry = (entry: DynamicSectionEntry) => {
+    if (!activeDynamicSection) return;
+    updateData((prev) => {
+      const sections = (prev.dynamicSections || []).map((s) => {
+        if (s.id !== activeDynamicSection.id) return s;
+        const existingEntries = s.entries || [];
+        const index = existingEntries.findIndex((e) => e.id === entry.id);
+        let updatedEntries: DynamicSectionEntry[];
+        if (index >= 0) {
+          updatedEntries = existingEntries.map((e) => (e.id === entry.id ? entry : e));
+        } else {
+          updatedEntries = [...existingEntries, entry];
+        }
+        return { ...s, entries: updatedEntries };
+      });
+      return { ...prev, dynamicSections: sections };
+    });
+    setNotification("Entry saved");
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleDeleteDynamicEntry = (sectionId: string, entryId: string) => {
+    updateData((prev) => ({
+      ...prev,
+      dynamicSections: (prev.dynamicSections || []).map((s) => {
+        if (s.id !== sectionId) return s;
+        return {
+          ...s,
+          entries: (s.entries || []).filter((e) => e.id !== entryId),
+        };
+      }),
+    }));
+  };
+
+  const toggleSectionDrawer = (sectionId: string) => {
+    setExpandedSectionIds((prev) => ({
+      ...prev,
+      [sectionId]: !prev[sectionId],
+    }));
   };
 
   const handleTogglePublish = async () => {
@@ -200,56 +351,6 @@ export default function VisualEditorPage({
         : "Portfolio unpublished."
     );
     setTimeout(() => setNotification(null), 4000);
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user || !data) return;
-    setUploadingImage(true);
-    try {
-      const url = await uploadPortfolioMedia(file, user.uid, data.portfolioId, "avatars");
-      updateData((prev) => ({
-        ...prev,
-        personalInfo: { ...prev.personalInfo, avatarUrl: url },
-      }));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const handleProjectCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>, projectId: string) => {
-    const file = e.target.files?.[0];
-    if (!file || !user || !data) return;
-    setUploadingImage(true);
-    try {
-      const url = await uploadPortfolioMedia(file, user.uid, data.portfolioId, "projects");
-      updateData((prev) => ({
-        ...prev,
-        projects: prev.projects.map((p) =>
-          p.id === projectId ? { ...p, coverImageUrl: url } : p
-        ),
-      }));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Project screenshot upload failed");
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user || !data) return;
-    setUploadingImage(true);
-    try {
-      const url = await uploadPortfolioMedia(file, user.uid, data.portfolioId, "resumes");
-      updateData((prev) => ({ ...prev, resumeUrl: url }));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Resume upload failed");
-    } finally {
-      setUploadingImage(false);
-    }
   };
 
   if (loading || !data) {
@@ -498,36 +599,21 @@ export default function VisualEditorPage({
                 {/* Sub: Personal Information */}
                 {contentSubSection === "personal" && (
                   <div className="space-y-5">
-                    {/* Avatar Upload */}
-                    <div className="flex items-center space-x-4 border-b border-editorial-border pb-4">
-                      {data.personalInfo.avatarUrl ? (
-                        <img
-                          src={data.personalInfo.avatarUrl}
-                          alt={data.personalInfo.fullName}
-                          className="h-16 w-16 rounded-full object-cover border border-editorial-border"
-                        />
-                      ) : (
-                        <div className="h-16 w-16 rounded-full bg-editorial-sand/40 border border-editorial-border flex items-center justify-center font-serif text-xl text-editorial-charcoal">
-                          {data.personalInfo.fullName.charAt(0) || "U"}
-                        </div>
-                      )}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-mono uppercase text-editorial-charcoal font-medium">
-                          Profile Photo
-                        </label>
-                        <label className="inline-flex items-center space-x-1.5 border border-editorial-border bg-editorial-ivory px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 transition-colors">
-                          <Upload className="h-3 w-3 text-editorial-mocha" />
-                          <span>{uploadingImage ? "Uploading..." : "Upload New Photo"}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleAvatarUpload}
-                            className="hidden"
-                          />
-                        </label>
-                        <p className="text-[10px] text-editorial-muted">JPG, PNG, WebP up to 5MB</p>
-                      </div>
-                    </div>
+                    {/* Profile Photo Media Control */}
+                    <MediaAssetControl
+                      label="Profile Photo"
+                      description="Paste an image URL for permanent portfolio display or select a file for temporary preview."
+                      value={data.personalInfo.avatarUrl || ""}
+                      onChange={(url) =>
+                        updateData((prev) => ({
+                          ...prev,
+                          profileImage: url || null,
+                          personalInfo: { ...prev.personalInfo, avatarUrl: url || undefined },
+                        }))
+                      }
+                      variant="avatar"
+                      type="image"
+                    />
 
                     <div>
                       <label className="block text-xs font-mono uppercase text-editorial-charcoal font-medium">
@@ -649,47 +735,17 @@ export default function VisualEditorPage({
                       />
                     </div>
 
-                    <div className="pt-3 border-t border-editorial-border space-y-2">
-                      <label className="block text-xs font-mono uppercase text-editorial-charcoal font-medium">
-                        Resume PDF Document
-                      </label>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="url"
-                          value={data.resumeUrl || ""}
-                          onChange={(e) =>
-                            updateData((prev) => ({ ...prev, resumeUrl: e.target.value }))
-                          }
-                          placeholder="https://... or upload PDF document"
-                          className="flex-grow border border-editorial-border bg-editorial-ivory/30 px-3 py-1.5 text-xs font-mono"
-                        />
-                        <label className="inline-flex items-center space-x-1 border border-editorial-border bg-editorial-ivory px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 flex-shrink-0 transition-colors">
-                          <Upload className="h-3 w-3 text-editorial-mocha" />
-                          <span>{uploadingImage ? "Uploading..." : "Upload PDF"}</span>
-                          <input
-                            type="file"
-                            accept="application/pdf,.pdf"
-                            onChange={handleResumeUpload}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                      {data.resumeUrl && (
-                        <div className="flex items-center space-x-1.5 text-[11px] font-mono text-emerald-700">
-                          <Check className="h-3 w-3" />
-                          <span>
-                            Resume active:{" "}
-                            <a
-                              href={data.resumeUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline font-semibold"
-                            >
-                              Open PDF
-                            </a>
-                          </span>
-                        </div>
-                      )}
+                    <div className="pt-3 border-t border-editorial-border">
+                      <MediaAssetControl
+                        label="Resume PDF Document"
+                        description="Paste an externally hosted PDF link (e.g. Google Drive public link, Dropbox, GitHub, personal domain) for a permanent download button, or preview a local PDF."
+                        value={data.resumeUrl || ""}
+                        onChange={(url) =>
+                          updateData((prev) => ({ ...prev, resumeUrl: url, resumeURL: url }))
+                        }
+                        variant="document"
+                        type="pdf"
+                      />
                     </div>
                   </div>
                 )}
@@ -795,42 +851,22 @@ export default function VisualEditorPage({
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-mono uppercase text-editorial-muted">Cover Screenshot / Image</label>
-                          <div className="mt-1 flex items-center space-x-2">
-                            {proj.coverImageUrl && (
-                              <img
-                                src={proj.coverImageUrl}
-                                alt={proj.title}
-                                className="h-9 w-12 object-cover border border-editorial-border bg-white rounded-none"
-                              />
-                            )}
-                            <input
-                              type="url"
-                              value={proj.coverImageUrl || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                updateData((prev) => ({
-                                  ...prev,
-                                  projects: prev.projects.map((p) =>
-                                    p.id === proj.id ? { ...p, coverImageUrl: val } : p
-                                  ),
-                                }));
-                              }}
-                              placeholder="https://... or upload"
-                              className="flex-grow border border-editorial-border bg-white px-2.5 py-1.5 text-xs font-mono"
-                            />
-                            <label className="inline-flex items-center space-x-1 border border-editorial-border bg-editorial-ivory px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 flex-shrink-0 transition-colors">
-                              <Upload className="h-3 w-3 text-editorial-mocha" />
-                              <span>{uploadingImage ? "..." : "Upload"}</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleProjectCoverUpload(e, proj.id)}
-                                className="hidden"
-                              />
-                            </label>
-                          </div>
+                        <div className="pt-1">
+                          <MediaAssetControl
+                            label="Cover Screenshot / Image"
+                            description="Paste a hosted screenshot URL or preview a local image."
+                            value={proj.coverImageUrl || ""}
+                            onChange={(url) => {
+                              updateData((prev) => ({
+                                ...prev,
+                                projects: prev.projects.map((p) =>
+                                  p.id === proj.id ? { ...p, coverImageUrl: url } : p
+                                ),
+                              }));
+                            }}
+                            variant="cover"
+                            type="image"
+                          />
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -1202,42 +1238,300 @@ export default function VisualEditorPage({
                 TAB 4: SECTION VISIBILITY & ORDERING
             -------------------------------------------------------------- */}
             {activeTab === "sections" && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-serif text-lg text-editorial-charcoal">Section Controls</h3>
-                  <p className="text-xs text-editorial-muted">
-                    Toggle visibility for any section on your portfolio.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  {data.sections.map((sec) => (
-                    <div
-                      key={sec.id}
-                      className="flex items-center justify-between p-3 border border-editorial-border bg-editorial-ivory/30 text-xs font-mono uppercase"
+              <div className="space-y-6">
+                {/* Dynamic Custom Sections Manager */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-serif text-lg text-editorial-charcoal">
+                        Dynamic Sections
+                      </h3>
+                      <p className="text-xs text-editorial-muted">
+                        Specialized sections for Hackathons, Publications, Talks, etc.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsSectionBuilderOpen(true)}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded bg-editorial-charcoal text-editorial-ivory text-xs font-mono uppercase tracking-wider hover:bg-black transition-colors shadow-sm"
                     >
-                      <span className={sec.isVisible ? "text-editorial-charcoal font-semibold" : "text-editorial-muted line-through"}>
-                        {sec.title}
-                      </span>
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add Section</span>
+                    </button>
+                  </div>
+
+                  {/* Empty state or list */}
+                  {(!data.dynamicSections || data.dynamicSections.length === 0) ? (
+                    <div className="p-5 text-center border border-dashed border-editorial-border bg-white rounded space-y-3">
+                      <p className="text-xs text-editorial-muted">
+                        No custom dynamic sections added yet. Expand your portfolio with hackathons, research, photography, or AI-generated sections.
+                      </p>
                       <button
                         type="button"
-                        onClick={() => {
-                          updateData((prev) => ({
-                            ...prev,
-                            sections: prev.sections.map((s) =>
-                              s.id === sec.id ? { ...s, isVisible: !s.isVisible } : s
-                            ),
-                          }));
-                        }}
-                        className={`p-1.5 border rounded ${
-                          sec.isVisible ? "bg-editorial-charcoal text-white" : "bg-white text-editorial-muted"
-                        }`}
-                        title={sec.isVisible ? "Hide section" : "Show section"}
+                        onClick={() => setIsSectionBuilderOpen(true)}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded border border-editorial-charcoal text-editorial-charcoal text-xs font-mono uppercase tracking-wider hover:bg-editorial-sand/30 transition-colors"
                       >
-                        {sec.isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>Explore Blueprint Library</span>
                       </button>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="space-y-3">
+                      {[...data.dynamicSections]
+                        .sort((a, b) => a.order - b.order)
+                        .map((sec, idx, arr) => {
+                          const isExpanded = Boolean(expandedSectionIds[sec.id]);
+                          const entriesCount = (sec.entries || []).length;
+
+                          return (
+                            <div
+                              key={sec.id}
+                              className="border border-editorial-border bg-white rounded-lg overflow-hidden transition-all shadow-sm"
+                            >
+                              {/* Header Card */}
+                              <div className="p-3.5 bg-editorial-ivory/20 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center space-x-2">
+                                    {/* Reorder Up/Down */}
+                                    <div className="flex flex-col space-y-0.5">
+                                      <button
+                                        type="button"
+                                        disabled={idx === 0}
+                                        onClick={() => handleReorderDynamicSection(sec.id, "up")}
+                                        className="text-editorial-muted hover:text-editorial-charcoal disabled:opacity-20 p-0.5"
+                                        title="Move up"
+                                      >
+                                        <ArrowUp className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={idx === arr.length - 1}
+                                        onClick={() => handleReorderDynamicSection(sec.id, "down")}
+                                        className="text-editorial-muted hover:text-editorial-charcoal disabled:opacity-20 p-0.5"
+                                        title="Move down"
+                                      >
+                                        <ArrowDown className="h-3 w-3" />
+                                      </button>
+                                    </div>
+
+                                    <div>
+                                      <h4
+                                        className={`text-xs font-mono uppercase font-bold ${
+                                          sec.isVisible
+                                            ? "text-editorial-charcoal"
+                                            : "text-editorial-muted line-through"
+                                        }`}
+                                      >
+                                        {sec.title}
+                                      </h4>
+                                      <span className="text-[10px] text-editorial-muted">
+                                        {sec.category || "Custom"} • {entriesCount} {entriesCount === 1 ? "entry" : "entries"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex items-center space-x-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleDynamicSectionVisibility(sec.id)}
+                                      className={`p-1.5 border rounded ${
+                                        sec.isVisible
+                                          ? "bg-editorial-charcoal text-white"
+                                          : "bg-white text-editorial-muted"
+                                      }`}
+                                      title={sec.isVisible ? "Hide section" : "Show section"}
+                                    >
+                                      {sec.isVisible ? (
+                                        <Eye className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <EyeOff className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDuplicateDynamicSection(sec.id)}
+                                      className="p-1.5 border border-editorial-border rounded bg-white text-editorial-muted hover:text-editorial-charcoal"
+                                      title="Duplicate section"
+                                    >
+                                      <Copy className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteDynamicSection(sec.id)}
+                                      className="p-1.5 border border-editorial-border rounded bg-white text-rose-500 hover:bg-rose-50"
+                                      title="Delete section"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Layout Selector */}
+                                <div className="flex items-center justify-between text-xs font-mono pt-1">
+                                  <label className="text-[10px] uppercase text-editorial-muted">
+                                    Layout:
+                                  </label>
+                                  <select
+                                    value={sec.layout}
+                                    onChange={(e) =>
+                                      handleUpdateDynamicSectionLayout(
+                                        sec.id,
+                                        e.target.value as DynamicSectionLayout
+                                      )
+                                    }
+                                    className="border border-editorial-border rounded px-2 py-0.5 text-xs bg-white text-editorial-charcoal"
+                                  >
+                                    <option value="cards">Cards</option>
+                                    <option value="editorial-cards">Editorial Cards</option>
+                                    <option value="timeline">Timeline</option>
+                                    <option value="achievement-grid">Achievement Grid</option>
+                                    <option value="gallery">Lightbox Gallery</option>
+                                    <option value="masonry">Masonry</option>
+                                    <option value="list">Minimal List</option>
+                                    <option value="stats">Stats & Metrics</option>
+                                    <option value="featured">Featured Spotlight</option>
+                                    <option value="split">50/50 Split</option>
+                                    <option value="minimal">Ultra Minimal</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              {/* Entries Drawer Header */}
+                              <div className="border-t border-editorial-border px-3.5 py-2 bg-white flex items-center justify-between">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSectionDrawer(sec.id)}
+                                  className="flex items-center space-x-1 text-xs font-mono text-editorial-muted hover:text-editorial-charcoal"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  )}
+                                  <span>Manage Entries ({entriesCount})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAddEntryModal(sec)}
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 text-[11px] font-mono font-medium transition-colors"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  <span>Add Entry</span>
+                                </button>
+                              </div>
+
+                              {/* Entries List when expanded */}
+                              {isExpanded && (
+                                <div className="border-t border-editorial-border/60 p-3 space-y-2 bg-editorial-ivory/10">
+                                  {entriesCount === 0 ? (
+                                    <div className="text-center py-3 text-xs text-editorial-muted font-mono">
+                                      No entries yet. Click "+ Add Entry" to populate this section.
+                                    </div>
+                                  ) : (
+                                    sec.entries.map((item, eIdx) => {
+                                      const itemTitle =
+                                        item.title ||
+                                        item.name ||
+                                        item.project_name ||
+                                        item.event_name ||
+                                        item.topic ||
+                                        item.company_name ||
+                                        `Entry #${eIdx + 1}`;
+
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          className="flex items-center justify-between p-2 rounded border border-editorial-border/70 bg-white text-xs"
+                                        >
+                                          <span className="font-medium truncate max-w-[180px] text-editorial-charcoal">
+                                            {itemTitle}
+                                          </span>
+                                          <div className="flex items-center space-x-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenEditEntryModal(sec, item)}
+                                              className="p-1 text-editorial-muted hover:text-editorial-charcoal"
+                                              title="Edit entry"
+                                            >
+                                              <Edit3 className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleDeleteDynamicEntry(sec.id, item.id)
+                                              }
+                                              className="p-1 text-editorial-muted hover:text-rose-500"
+                                              title="Delete entry"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Core Predefined Sections */}
+                <div className="pt-6 border-t border-editorial-border space-y-3">
+                  <div>
+                    <h3 className="font-serif text-lg text-editorial-charcoal">
+                      Core Portfolio Sections
+                    </h3>
+                    <p className="text-xs text-editorial-muted">
+                      Toggle visibility for default profile sections.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {data.sections.map((sec) => (
+                      <div
+                        key={sec.id}
+                        className="flex items-center justify-between p-3 border border-editorial-border bg-editorial-ivory/30 text-xs font-mono uppercase"
+                      >
+                        <span
+                          className={
+                            sec.isVisible
+                              ? "text-editorial-charcoal font-semibold"
+                              : "text-editorial-muted line-through"
+                          }
+                        >
+                          {sec.title}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateData((prev) => ({
+                              ...prev,
+                              sections: prev.sections.map((s) =>
+                                s.id === sec.id ? { ...s, isVisible: !s.isVisible } : s
+                              ),
+                            }));
+                          }}
+                          className={`p-1.5 border rounded ${
+                            sec.isVisible
+                              ? "bg-editorial-charcoal text-white"
+                              : "bg-white text-editorial-muted"
+                          }`}
+                          title={sec.isVisible ? "Hide section" : "Show section"}
+                        >
+                          {sec.isVisible ? (
+                            <Eye className="h-3.5 w-3.5" />
+                          ) : (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -1324,6 +1618,31 @@ export default function VisualEditorPage({
         </main>
 
       </div>
+
+      {/* Dynamic Section Builder Modal */}
+      {isSectionBuilderOpen && (
+        <SectionBuilderModal
+          isOpen={isSectionBuilderOpen}
+          onClose={() => setIsSectionBuilderOpen(false)}
+          onAddSection={handleAddDynamicSection}
+          currentSectionsCount={(data.dynamicSections || []).length}
+        />
+      )}
+
+      {/* Dynamic Entry Editor Modal */}
+      {isEntryEditorOpen && activeDynamicSection && (
+        <DynamicEntryEditorModal
+          isOpen={isEntryEditorOpen}
+          onClose={() => {
+            setIsEntryEditorOpen(false);
+            setActiveDynamicSection(null);
+            setActiveEntryForEdit(null);
+          }}
+          section={activeDynamicSection}
+          entry={activeEntryForEdit}
+          onSave={handleSaveDynamicEntry}
+        />
+      )}
     </div>
   );
 }

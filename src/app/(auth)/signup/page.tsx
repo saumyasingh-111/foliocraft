@@ -4,25 +4,35 @@ import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/firebase/auth-context";
-import { ArrowRight, Lock, Mail, User, AlertCircle, AlertTriangle } from "lucide-react";
+import { ArrowRight, Lock, Mail, User, AlertCircle, AlertTriangle, RefreshCw } from "lucide-react";
 
 function SignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedTheme = searchParams.get("theme");
 
-  const { signup, isConfigured, missingConfig, loading } = useAuth();
+  const { signup, isConfigured, missingConfig, completeProfileRecovery } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [canRecoverProfile, setCanRecoverProfile] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return; // Prevent duplicate submissions
+
     if (!email.trim() || !password || !name.trim()) {
       setError("Please complete all required fields.");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError("Please enter a valid email address.");
       return;
     }
 
@@ -39,7 +49,9 @@ function SignupContent() {
     }
 
     setError(null);
+    setCanRecoverProfile(false);
     setSubmitting(true);
+
     try {
       await signup(email, password, name);
       const target = preselectedTheme
@@ -47,10 +59,41 @@ function SignupContent() {
         : "/onboarding";
       router.push(target);
     } catch (err: unknown) {
+      console.error("[Signup Error Caught]:", err);
       const msg = err instanceof Error ? err.message : "Failed to create account.";
       setError(msg);
+
+      // Check if user account was created in Auth but Firestore initialization failed
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as { code: string }).code === "auth/profile-creation-failed"
+      ) {
+        setCanRecoverProfile(true);
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRecoverProfile = async () => {
+    if (recovering) return;
+    setRecovering(true);
+    setError(null);
+
+    try {
+      await completeProfileRecovery(name);
+      const target = preselectedTheme
+        ? `/onboarding?theme=${preselectedTheme}`
+        : "/onboarding";
+      router.push(target);
+    } catch (err: unknown) {
+      console.error("[Profile Recovery Error]:", err);
+      const msg = err instanceof Error ? err.message : "Profile setup recovery failed.";
+      setError(msg);
+    } finally {
+      setRecovering(false);
     }
   };
 
@@ -96,9 +139,27 @@ function SignupContent() {
           )}
 
           {error && (
-            <div className="mb-6 flex items-start space-x-2.5 border border-red-200 bg-red-50/70 p-3.5 text-xs text-red-800">
-              <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-600 mt-0.5" />
-              <span>{error}</span>
+            <div className="mb-6 border border-red-200 bg-red-50/80 p-4 text-xs text-red-800 space-y-2">
+              <div className="flex items-start space-x-2.5">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-600 mt-0.5" />
+                <span className="leading-relaxed">{error}</span>
+              </div>
+
+              {/* Profile Recovery Action if Auth was provisioned but Firestore failed */}
+              {canRecoverProfile && (
+                <div className="pt-2 border-t border-red-200 flex items-center justify-between">
+                  <span className="text-[11px] text-red-700">Account verified in Auth.</span>
+                  <button
+                    type="button"
+                    onClick={handleRecoverProfile}
+                    disabled={recovering}
+                    className="inline-flex items-center space-x-1.5 border border-red-800 bg-red-800 text-white px-3 py-1 text-xs font-mono uppercase tracking-wider hover:bg-red-900 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${recovering ? "animate-spin" : ""}`} />
+                    <span>{recovering ? "Connecting..." : "Complete Profile Setup"}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -116,7 +177,8 @@ function SignupContent() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Alex Morgan"
-                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
+                  disabled={submitting}
+                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors disabled:opacity-60"
                   required
                 />
               </div>
@@ -135,7 +197,8 @@ function SignupContent() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
+                  disabled={submitting}
+                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors disabled:opacity-60"
                   required
                 />
               </div>
@@ -154,7 +217,8 @@ function SignupContent() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters"
-                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors"
+                  disabled={submitting}
+                  className="block w-full border border-editorial-border bg-editorial-ivory/30 pl-10 pr-3 py-2.5 text-sm text-editorial-charcoal focus:border-editorial-charcoal focus:bg-white focus:outline-none transition-colors disabled:opacity-60"
                   required
                 />
               </div>
@@ -162,8 +226,8 @@ function SignupContent() {
 
             <button
               type="submit"
-              disabled={submitting || loading}
-              className="w-full mt-6 flex items-center justify-center space-x-2 bg-editorial-charcoal py-3 px-4 text-sm font-medium text-editorial-ivory hover:bg-editorial-softdark transition-colors disabled:opacity-50"
+              disabled={submitting}
+              className="w-full mt-6 flex items-center justify-center space-x-2 bg-editorial-charcoal py-3 px-4 text-sm font-medium text-editorial-ivory hover:bg-editorial-softdark transition-colors disabled:opacity-60"
             >
               <span>{submitting ? "Creating Account..." : "Continue to Setup"}</span>
               <ArrowRight className="h-4 w-4" />

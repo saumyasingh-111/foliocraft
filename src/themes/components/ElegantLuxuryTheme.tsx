@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PortfolioData } from "../types";
+import { DynamicSectionRenderer } from "@/components/sections/DynamicSectionRenderer";
 import { ArrowUpRight, Download, Sparkles, MapPin } from "lucide-react";
 
 interface ThemeProps {
@@ -9,7 +10,7 @@ interface ThemeProps {
   previewMode?: boolean;
 }
 
-export function ElegantLuxuryTheme({ data }: ThemeProps) {
+export function ElegantLuxuryTheme({ data, previewMode }: ThemeProps) {
   const { personalInfo, about, projects, experience, skills, achievements, socialLinks, resumeUrl } = data;
 
   return (
@@ -158,6 +159,18 @@ export function ElegantLuxuryTheme({ data }: ThemeProps) {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Dynamic Custom Sections */}
+      {data.dynamicSections && data.dynamicSections.length > 0 && (
+        <>
+          {data.dynamicSections
+            .filter((sec) => sec.isVisible)
+            .sort((a, b) => a.order - b.order)
+            .map((sec) => (
+              <DynamicSectionRenderer key={sec.id} section={sec} previewMode={previewMode} />
+            ))}
+        </>
       )}
 
       {/* Footer / Salon */}

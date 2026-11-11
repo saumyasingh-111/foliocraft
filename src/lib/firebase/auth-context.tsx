@@ -4,14 +4,23 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   User as FirebaseUser,
   onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db, isFirebaseConfigured, getMissingFirebaseConfig } from "./client";
+import {
+  getClientAuth,
+  getClientDb,
+  isFirebaseConfigured,
+  getMissingFirebaseConfig,
+} from "./client";
+import {
+  signInUser,
+  signUpUser,
+  signOutUser,
+  sendUserPasswordReset,
+  retryProfileSetup,
+  SignUpResult,
+} from "./auth";
+import { createOrUpdateUserProfile, getUserProfile } from "./firestore";
 
 export interface AuthUser {
   uid: string;
@@ -22,21 +31,26 @@ export interface AuthUser {
 
 interface AuthContextType {
   user: AuthUser | null;
+  rawUser: FirebaseUser | null;
   loading: boolean;
   isConfigured: boolean;
   missingConfig: string[];
-  login: (email: string, pass: string) => Promise<void>;
-  signup: (email: string, pass: string, name?: string) => Promise<void>;
+  login: (email: string, pass: string) => Promise<FirebaseUser>;
+  signup: (email: string, pass: string, name?: string) => Promise<SignUpResult>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  completeProfileRecovery: (name?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Map Firebase error codes to user-friendly messages
+// Map Firebase error codes to human-readable guidance
 export function mapFirebaseAuthError(error: unknown): string {
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = (error as { code: string }).code;
+    const message = (error as { message?: string }).message || "";
+    console.error("[FirebaseAuth Error Code]:", code, message);
+
     switch (code) {
       case "auth/invalid-credential":
       case "auth/wrong-password":
@@ -46,24 +60,27 @@ export function mapFirebaseAuthError(error: unknown): string {
       case "auth/invalid-email":
         return "Please enter a valid email address.";
       case "auth/email-already-in-use":
-        return "An account with this email address already exists.";
+        return "An account with this email address already exists. Please sign in instead.";
       case "auth/weak-password":
-        return "Password must be at least 6 characters.";
+        return "Password must be at least 6 characters long.";
       case "auth/user-disabled":
         return "This user account has been disabled. Please contact support.";
       case "auth/too-many-requests":
-        return "Access temporarily disabled due to multiple failed login attempts. Please try again later.";
+        return "Access temporarily disabled due to multiple failed attempts. Please try again later.";
       case "auth/network-request-failed":
         return "Network request failed. Please check your internet connection.";
-      case "auth/api-key-not-valid":
-      case "auth/invalid-api-key":
-        return "Authentication service configuration is invalid. Please verify your Firebase API key.";
+      case "auth/permission-denied":
+        return "Database permission denied. Please verify your Firestore security rules in Firebase Console.";
+      case "auth/configuration-not-found":
+        return "Firebase Authentication is not configured or Email/Password provider is disabled. In Firebase Console, open Build > Authentication > Sign-in method, click Email/Password, enable it, and click Save.";
+      case "auth/profile-creation-failed":
+        return message;
       default:
-        if ("message" in error && typeof (error as { message: unknown }).message === "string") {
-          return (error as { message: string }).message;
-        }
+        return message || "An unexpected authentication error occurred. Please try again.";
     }
   }
+
+  console.error("[FirebaseAuth Unknown Error]:", error);
   if (error instanceof Error) {
     return error.message;
   }
@@ -72,18 +89,27 @@ export function mapFirebaseAuthError(error: unknown): string {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [rawUser, setRawUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const missingConfig = getMissingFirebaseConfig();
 
   useEffect(() => {
-    if (!isFirebaseConfigured || !auth) {
+    if (!isFirebaseConfigured) {
       setLoading(false);
       return;
     }
 
+    const auth = getClientAuth();
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
+    // Subscribe to Firebase Auth state
     const unsubscribe = onAuthStateChanged(
       auth,
       (fbUser: FirebaseUser | null) => {
+        setRawUser(fbUser);
         if (fbUser) {
           setUser({
             uid: fbUser.uid,
@@ -97,8 +123,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       },
       (error) => {
-        console.error("Auth state listener error:", error);
+        console.error("[FirebaseAuth] Observer state error:", error);
         setUser(null);
+        setRawUser(null);
         setLoading(false);
       }
     );
@@ -106,118 +133,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, pass: string): Promise<void> => {
-    if (!isFirebaseConfigured || !auth) {
-      throw new Error(
-        "Authentication service is not configured. Please configure your Firebase environment variables."
-      );
-    }
-
-    setLoading(true);
-    try {
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
-      setUser({
-        uid: cred.user.uid,
-        email: cred.user.email,
-        displayName: cred.user.displayName || cred.user.email?.split("@")[0] || "User",
-        photoURL: cred.user.photoURL,
-      });
-
-      // Retrieve or verify user document in Firestore
-      if (db) {
-        try {
-          const userDocRef = doc(db, "users", cred.user.uid);
-          const snap = await getDoc(userDocRef);
-          if (!snap.exists()) {
-            await setDoc(userDocRef, {
-              userId: cred.user.uid,
-              email: cred.user.email,
-              displayName: cred.user.displayName || cred.user.email?.split("@")[0] || "User",
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          }
-        } catch (dbErr) {
-          console.warn("Could not sync user profile to Firestore:", dbErr);
-        }
-      }
-    } catch (err) {
-      throw new Error(mapFirebaseAuthError(err));
-    } finally {
-      setLoading(false);
-    }
+  const login = async (email: string, pass: string): Promise<FirebaseUser> => {
+    const credUser = await signInUser(email, pass);
+    setRawUser(credUser);
+    setUser({
+      uid: credUser.uid,
+      email: credUser.email,
+      displayName: credUser.displayName || credUser.email?.split("@")[0] || "User",
+      photoURL: credUser.photoURL,
+    });
+    return credUser;
   };
 
-  const signup = async (email: string, pass: string, name?: string): Promise<void> => {
-    if (!isFirebaseConfigured || !auth) {
-      throw new Error(
-        "Authentication service is not configured. Please configure your Firebase environment variables."
-      );
-    }
-
-    setLoading(true);
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-      const displayName = name?.trim() || email.split("@")[0] || "User";
-
-      if (name) {
-        await updateProfile(cred.user, { displayName });
-      }
-
-      setUser({
-        uid: cred.user.uid,
-        email: cred.user.email,
-        displayName,
-        photoURL: null,
-      });
-
-      // Create user profile record in Firestore
-      if (db) {
-        try {
-          const userDocRef = doc(db, "users", cred.user.uid);
-          await setDoc(userDocRef, {
-            userId: cred.user.uid,
-            email: cred.user.email,
-            displayName,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        } catch (dbErr) {
-          console.warn("Could not save user profile to Firestore:", dbErr);
-        }
-      }
-    } catch (err) {
-      throw new Error(mapFirebaseAuthError(err));
-    } finally {
-      setLoading(false);
-    }
+  const signup = async (email: string, pass: string, name?: string): Promise<SignUpResult> => {
+    const result = await signUpUser(email, pass, name || "");
+    setRawUser(result.user);
+    setUser({
+      uid: result.user.uid,
+      email: result.user.email,
+      displayName: result.user.displayName || name || "User",
+      photoURL: null,
+    });
+    return result;
   };
 
   const logout = async (): Promise<void> => {
-    if (auth) {
-      await firebaseSignOut(auth);
-    }
+    await signOutUser();
     setUser(null);
+    setRawUser(null);
   };
 
   const resetPassword = async (email: string): Promise<void> => {
-    if (!isFirebaseConfigured || !auth) {
-      throw new Error(
-        "Authentication service is not configured. Please configure your Firebase environment variables."
-      );
-    }
+    await sendUserPasswordReset(email);
+  };
 
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-    } catch (err) {
-      throw new Error(mapFirebaseAuthError(err));
+  const completeProfileRecovery = async (name?: string): Promise<void> => {
+    const auth = getClientAuth();
+    const currentUser = auth?.currentUser || rawUser;
+    if (!currentUser) {
+      throw new Error("No active authenticated session found to recover.");
     }
+    await retryProfileSetup(currentUser, name);
+    setUser({
+      uid: currentUser.uid,
+      email: currentUser.email,
+      displayName: name || currentUser.displayName || "User",
+      photoURL: currentUser.photoURL,
+    });
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        rawUser,
         loading,
         isConfigured: isFirebaseConfigured,
         missingConfig,
@@ -225,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signup,
         logout,
         resetPassword,
+        completeProfileRecovery,
       }}
     >
       {children}

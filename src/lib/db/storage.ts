@@ -1,10 +1,32 @@
-import { uploadMediaToStorage, UploadCategory } from "../firebase/storage";
+/**
+ * Media Storage Abstraction Adapter
+ * 
+ * Routes media handling through the no-cost media service,
+ * supporting temporary in-memory previews and external hosted URLs.
+ */
+import {
+  createTemporaryPreview,
+  revokeTemporaryPreview,
+  validateMediaUrl,
+  validateLocalFile,
+  isCloudStorageAvailable,
+} from "../media/mediaService";
 
 export async function uploadPortfolioMedia(
   file: File,
-  userId: string,
-  portfolioId: string,
-  category: "avatars" | "projects" | "resumes" | "gallery"
+  userId?: string,
+  portfolioId?: string,
+  category: "avatars" | "profile" | "projects" | "resumes" | "resume" | "certificates" | "gallery" = "projects"
 ): Promise<string> {
-  return await uploadMediaToStorage(file, userId, portfolioId, category as UploadCategory);
+  const isPdf = category === "resumes" || category === "resume";
+  const preview = createTemporaryPreview(file, isPdf ? "pdf" : "image");
+  return preview.previewUrl;
 }
+
+export {
+  createTemporaryPreview,
+  revokeTemporaryPreview,
+  validateMediaUrl,
+  validateLocalFile,
+  isCloudStorageAvailable,
+};

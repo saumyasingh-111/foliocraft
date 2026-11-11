@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PortfolioData } from "../types";
+import { DynamicSectionRenderer } from "@/components/sections/DynamicSectionRenderer";
 import { Sparkles, ArrowUpRight, Heart, Smile, Star, Download } from "lucide-react";
 
 interface ThemeProps {
@@ -9,7 +10,7 @@ interface ThemeProps {
   previewMode?: boolean;
 }
 
-export function PlayfulColorfulTheme({ data }: ThemeProps) {
+export function PlayfulColorfulTheme({ data, previewMode }: ThemeProps) {
   const { personalInfo, about, projects, experience, skills, socialLinks, resumeUrl } = data;
 
   return (
@@ -169,6 +170,18 @@ export function PlayfulColorfulTheme({ data }: ThemeProps) {
             ))}
           </div>
         </section>
+      )}
+
+      {/* Dynamic Custom Sections */}
+      {data.dynamicSections && data.dynamicSections.length > 0 && (
+        <>
+          {data.dynamicSections
+            .filter((sec) => sec.isVisible)
+            .sort((a, b) => a.order - b.order)
+            .map((sec) => (
+              <DynamicSectionRenderer key={sec.id} section={sec} previewMode={previewMode} />
+            ))}
+        </>
       )}
 
       {/* Footer */}

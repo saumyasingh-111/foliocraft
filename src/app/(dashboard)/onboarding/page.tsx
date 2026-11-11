@@ -8,7 +8,8 @@ import {
   getUserPortfolios,
   checkUsernameAvailability,
 } from "@/lib/db/portfolios";
-import { uploadPortfolioMedia } from "@/lib/db/storage";
+import { createOrUpdateUserProfile } from "@/lib/firebase/firestore";
+import { MediaAssetControl } from "@/components/shared/MediaAssetControl";
 import {
   PortfolioData,
   EducationItem,
@@ -64,7 +65,6 @@ function OnboardingWizardContent() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
   const [slugError, setSlugError] = useState<string | null>(null);
 
   // Draft Portfolio State
@@ -122,24 +122,30 @@ function OnboardingWizardContent() {
 
   const handleNext = async () => {
     setSaving(true);
-    await persistChanges();
-    setSaving(false);
-
-    if (currentStep < STEPS.length) {
-      setCurrentStep((prev) => prev + 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      // Final step: validate username and redirect to editor
-      const isAvailable = await checkUsernameAvailability(
-        formData.username,
-        formData.portfolioId
-      );
-      if (!isAvailable) {
-        setSlugError("This username is already taken. Please choose another.");
-        return;
-      }
+    try {
       await persistChanges();
-      router.push(`/editor/${formData.portfolioId}`);
+
+      if (currentStep < STEPS.length) {
+        setCurrentStep((prev) => prev + 1);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        // Final step: validate username and redirect to editor
+        const isAvailable = await checkUsernameAvailability(
+          formData.username,
+          formData.portfolioId
+        );
+        if (!isAvailable) {
+          setSlugError("This username is already taken. Please choose another.");
+          return;
+        }
+        await persistChanges();
+        if (user?.uid) {
+          await createOrUpdateUserProfile(user.uid, { onboardingCompleted: true }).catch(() => {});
+        }
+        router.push(`/editor/${formData.portfolioId}`);
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -147,54 +153,6 @@ function OnboardingWizardContent() {
     if (currentStep > 1) {
       setCurrentStep((prev) => prev - 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    setUploadingImage(true);
-    try {
-      const url = await uploadPortfolioMedia(file, user.uid, formData.portfolioId, "avatars");
-      setFormData((prev) => ({
-        ...prev,
-        personalInfo: { ...prev.personalInfo, avatarUrl: url },
-      }));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to upload image.");
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const handleProjectCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>, projectId: string) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    setUploadingImage(true);
-    try {
-      const url = await uploadPortfolioMedia(file, user.uid, formData.portfolioId, "projects");
-      setFormData((prev) => ({
-        ...prev,
-        projects: prev.projects.map((p) => (p.id === projectId ? { ...p, coverImageUrl: url } : p)),
-      }));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to upload project screenshot.");
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    setUploadingImage(true);
-    try {
-      const url = await uploadPortfolioMedia(file, user.uid, formData.portfolioId, "resumes");
-      setFormData((prev) => ({ ...prev, resumeUrl: url }));
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to upload resume.");
-    } finally {
-      setUploadingImage(false);
     }
   };
 
@@ -387,37 +345,20 @@ function OnboardingWizardContent() {
               Introduce yourself with basic credentials. You can update this at any time in the live editor.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-editorial-border">
-              <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 border-editorial-border bg-editorial-ivory flex-shrink-0 flex items-center justify-center">
-                {formData.personalInfo.avatarUrl ? (
-                  <img
-                    src={formData.personalInfo.avatarUrl}
-                    alt="Avatar"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <User className="h-8 w-8 text-editorial-sand" />
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="block text-xs font-mono uppercase text-editorial-charcoal font-medium">
-                  Profile Photograph
-                </label>
-                <label className="inline-flex items-center space-x-2 border border-editorial-border bg-editorial-ivory px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 transition-colors">
-                  <Upload className="h-3.5 w-3.5 text-editorial-mocha" />
-                  <span>{uploadingImage ? "Uploading..." : "Upload New Photo"}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
-                </label>
-                <p className="text-[11px] text-editorial-muted">
-                  PNG, JPG or WebP up to 5MB.
-                </p>
-              </div>
-            </div>
+            <MediaAssetControl
+              label="Profile Photograph"
+              description="Enter a hosted image URL (permanent) or select a local photo for temporary session preview."
+              value={formData.personalInfo.avatarUrl || ""}
+              onChange={(url) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  profileImage: url || null,
+                  personalInfo: { ...prev.personalInfo, avatarUrl: url || undefined },
+                }))
+              }
+              variant="avatar"
+              type="image"
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
@@ -1031,44 +972,22 @@ function OnboardingWizardContent() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-mono uppercase text-editorial-charcoal">Cover Image / Screenshot</label>
-                  <div className="mt-1.5 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                    {proj.coverImageUrl && (
-                      <img
-                        src={proj.coverImageUrl}
-                        alt={proj.title || "Project preview"}
-                        className="h-12 w-20 object-cover border border-editorial-border bg-editorial-ivory"
-                      />
-                    )}
-                    <div className="flex-grow w-full">
-                      <input
-                        type="url"
-                        value={proj.coverImageUrl || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData((prev) => ({
-                            ...prev,
-                            projects: prev.projects.map((p) =>
-                              p.id === proj.id ? { ...p, coverImageUrl: val } : p
-                            ),
-                          }));
-                        }}
-                        placeholder="https://... or upload a screenshot"
-                        className="block w-full border border-editorial-border bg-white px-3 py-1.5 text-xs font-mono"
-                      />
-                    </div>
-                    <label className="inline-flex items-center space-x-1.5 border border-editorial-border bg-editorial-ivory px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal cursor-pointer hover:bg-editorial-sand/30 flex-shrink-0 transition-colors">
-                      <Upload className="h-3 w-3 text-editorial-mocha" />
-                      <span>{uploadingImage ? "Uploading..." : "Upload Screenshot"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleProjectCoverUpload(e, proj.id)}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
+                <div className="pt-2">
+                  <MediaAssetControl
+                    label="Project Cover Screenshot"
+                    description="Provide a hosted image link or select a local image for temporary preview."
+                    value={proj.coverImageUrl || ""}
+                    onChange={(url) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        projects: prev.projects.map((p) =>
+                          p.id === proj.id ? { ...p, coverImageUrl: url } : p
+                        ),
+                      }));
+                    }}
+                    variant="cover"
+                    type="image"
+                  />
                 </div>
               </div>
             ))}
@@ -1243,56 +1162,19 @@ function OnboardingWizardContent() {
         {currentStep === 9 && (
           <div className="space-y-6">
             <p className="text-xs text-editorial-muted font-sans">
-              Provide an optional PDF resume or link. A download button will appear on your published portfolio.
+              Provide an optional PDF resume or hosted document link. A download button will appear on your published portfolio.
             </p>
 
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-editorial-charcoal font-medium">
-                Resume PDF Document
-              </label>
-              <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <div className="flex-grow w-full">
-                  <input
-                    type="url"
-                    value={formData.resumeUrl || ""}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, resumeUrl: e.target.value }))
-                    }
-                    placeholder="https://... or upload PDF from device"
-                    className="block w-full border border-editorial-border bg-editorial-ivory/30 px-3.5 py-2.5 text-sm"
-                  />
-                </div>
-                <label className="inline-flex items-center space-x-2 border border-editorial-charcoal bg-editorial-charcoal text-editorial-ivory px-4 py-2.5 text-xs font-mono uppercase tracking-wider cursor-pointer hover:bg-editorial-softdark transition-colors flex-shrink-0">
-                  <Upload className="h-3.5 w-3.5" />
-                  <span>{uploadingImage ? "Uploading..." : "Upload PDF Resume"}</span>
-                  <input
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    onChange={handleResumeUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              {formData.resumeUrl && (
-                <div className="mt-2 flex items-center space-x-2 text-xs font-mono text-emerald-700">
-                  <Check className="h-3.5 w-3.5" />
-                  <span>
-                    Resume attached:{" "}
-                    <a
-                      href={formData.resumeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline font-semibold"
-                    >
-                      View Document
-                    </a>
-                  </span>
-                </div>
-              )}
-              <p className="mt-2 text-[11px] text-editorial-muted font-mono">
-                Supports PDF up to 10MB stored securely in Firebase Storage. Leaving this empty will omit the resume button on your site.
-              </p>
-            </div>
+            <MediaAssetControl
+              label="Resume PDF Document"
+              description="Provide an externally hosted PDF link (e.g. Google Drive public link, Dropbox, GitHub, or personal site) for permanent download, or select a local PDF for temporary session preview."
+              value={formData.resumeUrl || ""}
+              onChange={(url) =>
+                setFormData((prev) => ({ ...prev, resumeUrl: url, resumeURL: url }))
+              }
+              variant="document"
+              type="pdf"
+            />
           </div>
         )}
 

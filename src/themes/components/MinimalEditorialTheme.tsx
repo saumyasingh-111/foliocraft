@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PortfolioData } from "../types";
+import { DynamicSectionRenderer } from "@/components/sections/DynamicSectionRenderer";
 import {
   ArrowUpRight,
   Download,
@@ -89,11 +90,22 @@ export function MinimalEditorialTheme({ data, previewMode }: ThemeProps) {
       {about.bioLong && (
         <section id="about" className="py-20 px-6 lg:px-16 border-b border-theme-border/60">
           <div className="mx-auto max-w-6xl grid grid-cols-1 md:grid-cols-12 gap-12">
-            <div className="md:col-span-4">
-              <span className="text-xs font-mono uppercase tracking-widest text-theme-muted">
-                01 / Narrative
-              </span>
-              <h2 className="text-2xl font-normal mt-2">Biography</h2>
+            <div className="md:col-span-4 space-y-5">
+              {personalInfo.avatarUrl && (
+                <div className="h-28 w-28 overflow-hidden border border-theme-border bg-theme-surface">
+                  <img
+                    src={personalInfo.avatarUrl}
+                    alt={personalInfo.fullName}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+              <div>
+                <span className="text-xs font-mono uppercase tracking-widest text-theme-muted">
+                  01 / Narrative
+                </span>
+                <h2 className="text-2xl font-normal mt-2">Biography</h2>
+              </div>
             </div>
             <div className="md:col-span-8 space-y-6">
               <p className="font-serif text-xl sm:text-2xl text-theme-text leading-relaxed font-light italic">
@@ -254,6 +266,18 @@ export function MinimalEditorialTheme({ data, previewMode }: ThemeProps) {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Dynamic Custom Sections */}
+      {data.dynamicSections && data.dynamicSections.length > 0 && (
+        <>
+          {data.dynamicSections
+            .filter((sec) => sec.isVisible)
+            .sort((a, b) => a.order - b.order)
+            .map((sec) => (
+              <DynamicSectionRenderer key={sec.id} section={sec} previewMode={previewMode} />
+            ))}
+        </>
       )}
 
       {/* Footer / Contact */}

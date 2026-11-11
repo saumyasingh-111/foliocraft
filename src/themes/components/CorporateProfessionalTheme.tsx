@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PortfolioData } from "../types";
+import { DynamicSectionRenderer } from "@/components/sections/DynamicSectionRenderer";
 import {
   Briefcase,
   GraduationCap,
@@ -19,7 +20,7 @@ interface ThemeProps {
   previewMode?: boolean;
 }
 
-export function CorporateProfessionalTheme({ data }: ThemeProps) {
+export function CorporateProfessionalTheme({ data, previewMode }: ThemeProps) {
   const { personalInfo, about, projects, experience, education, skills, achievements, socialLinks, resumeUrl } = data;
 
   return (
@@ -257,6 +258,18 @@ export function CorporateProfessionalTheme({ data }: ThemeProps) {
           </div>
         )}
       </section>
+
+      {/* Dynamic Custom Sections */}
+      {data.dynamicSections && data.dynamicSections.length > 0 && (
+        <>
+          {data.dynamicSections
+            .filter((sec) => sec.isVisible)
+            .sort((a, b) => a.order - b.order)
+            .map((sec) => (
+              <DynamicSectionRenderer key={sec.id} section={sec} previewMode={previewMode} />
+            ))}
+        </>
+      )}
 
       {/* Executive Footer */}
       <footer id="contact" className="py-16 px-6 border-t border-theme-border bg-white text-center space-y-4">

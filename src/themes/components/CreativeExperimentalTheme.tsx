@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PortfolioData } from "../types";
+import { DynamicSectionRenderer } from "@/components/sections/DynamicSectionRenderer";
 import { ArrowUpRight, Github, Download, Globe, Terminal, MapPin } from "lucide-react";
 
 interface ThemeProps {
@@ -9,7 +10,7 @@ interface ThemeProps {
   previewMode?: boolean;
 }
 
-export function CreativeExperimentalTheme({ data }: ThemeProps) {
+export function CreativeExperimentalTheme({ data, previewMode }: ThemeProps) {
   const { personalInfo, about, projects, experience, education, skills, achievements, socialLinks, resumeUrl } = data;
 
   return (
@@ -219,6 +220,18 @@ export function CreativeExperimentalTheme({ data }: ThemeProps) {
 
         </div>
       </section>
+
+      {/* Dynamic Custom Sections */}
+      {data.dynamicSections && data.dynamicSections.length > 0 && (
+        <>
+          {data.dynamicSections
+            .filter((sec) => sec.isVisible)
+            .sort((a, b) => a.order - b.order)
+            .map((sec) => (
+              <DynamicSectionRenderer key={sec.id} section={sec} previewMode={previewMode} />
+            ))}
+        </>
+      )}
 
       {/* Footer */}
       <footer id="contact" className="py-20 px-6 lg:px-12 text-center space-y-6">

@@ -168,15 +168,89 @@ export interface CustomSectionItem {
   content: string;
 }
 
+// ===============================================================
+// DYNAMIC SECTION SYSTEM TYPES
+// ===============================================================
+export type DynamicFieldType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "date"
+  | "url"
+  | "email"
+  | "boolean"
+  | "select"
+  | "multi-select"
+  | "image"
+  | "image-gallery"
+  | "document"
+  | "tags"
+  | "location";
+
+export interface DynamicSectionField {
+  id: string;
+  label: string;
+  type: DynamicFieldType;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[]; // for select / multi-select
+  description?: string;
+}
+
+export type DynamicSectionLayout =
+  | "cards"
+  | "editorial-cards"
+  | "timeline"
+  | "achievement-grid"
+  | "gallery"
+  | "masonry"
+  | "list"
+  | "stats"
+  | "featured"
+  | "split"
+  | "minimal";
+
+export interface DynamicSectionEntry {
+  id: string;
+  [fieldId: string]: any;
+}
+
+export interface DynamicSection {
+  id: string;
+  type?: "custom" | string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  category?: string;
+  icon?: string;
+  isVisible: boolean;
+  order: number;
+  layout: DynamicSectionLayout;
+  fields: DynamicSectionField[];
+  entries: DynamicSectionEntry[];
+  themeSettings?: Record<string, any>;
+}
+
 export interface PortfolioData {
   portfolioId: string;
   userId: string;
-  username: string; // URL slug e.g. "saumya"
+  ownerId?: string; // Canonical owner UID
+  username: string; // URL slug e.g. "alex-morgan"
+  slug?: string; // Canonical alias for username slug
   title: string;
+  professionalTitle?: string;
+  description?: string;
+  profileImage?: string | null;
+  selectedTheme?: ThemeId;
+  customThemeSettings?: ThemeSettings;
   isPublished: boolean;
+  published?: boolean; // Canonical alias for isPublished
   publishedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  resumeURL?: string | null; // Canonical alias for resumeUrl
 
   themeId: ThemeId;
   themeSettings: ThemeSettings;
@@ -211,8 +285,9 @@ export interface PortfolioData {
   testimonials?: TestimonialItem[];
   services?: ServiceItem[];
   socialLinks: SocialLinks;
-  resumeUrl?: string;
+  resumeUrl?: string | null;
   customSections?: CustomSectionItem[];
+  dynamicSections?: DynamicSection[];
 }
 
 export interface ThemeMeta {
