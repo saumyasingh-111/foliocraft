@@ -11,7 +11,7 @@ import {
   getPortfolioAnalytics,
 } from "@/lib/db/portfolios";
 import { PortfolioData, ThemeId } from "@/themes/types";
-import { THEME_REGISTRY, INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
+import { THEME_REGISTRY, createEmptyPortfolio } from "@/lib/utils/defaults";
 import { getPortfolioUrl, getDisplayPortfolioUrl } from "@/lib/utils/url";
 import {
   Globe,
@@ -127,28 +127,25 @@ export default function DashboardPage() {
 
   const handleCreateNew = async () => {
     if (!user) return;
-    const newId = "p-" + Math.random().toString(36).substring(2, 9);
-    const usernameSlug = (user.displayName || user.email?.split("@")[0] || "user")
+    const usernameSlug = (user.displayName || user.email?.split("@")[0] || "creative")
       .toLowerCase()
-      .replace(/[^a-z0-9]/g, "") + "-" + Math.floor(Math.random() * 900 + 100);
+      .replace(/[^a-z0-9]/g, "") + "-" + Math.floor(Math.random() * 9000 + 1000);
 
-    const newPortfolio: PortfolioData = {
-      ...INITIAL_DEFAULT_PORTFOLIO,
-      portfolioId: newId,
-      userId: user.uid,
-      title: `${user.displayName || "My"} Portfolio`,
-      username: usernameSlug,
-      isPublished: false,
-      publishedAt: null,
-      personalInfo: {
-        ...INITIAL_DEFAULT_PORTFOLIO.personalInfo,
-        fullName: user.displayName || "Creative Practitioner",
-        email: user.email || "",
-      },
-    };
+    const newPortfolio = createEmptyPortfolio(
+      user.uid,
+      usernameSlug,
+      user.displayName || "My",
+      user.email || ""
+    );
 
-    await savePortfolio(newPortfolio);
-    router.push(`/editor/${newId}`);
+    try {
+      await savePortfolio(newPortfolio);
+      router.push(`/editor/${newPortfolio.portfolioId}`);
+    } catch (err: any) {
+      console.error("Create portfolio failed:", err);
+      setActionMessage(err?.message || "Failed to create new portfolio draft.");
+      setTimeout(() => setActionMessage(null), 4000);
+    }
   };
 
   // Helper to compute completeness percentage

@@ -7,12 +7,13 @@ rules_version = '2';
 // This security rules file assumes the following data structures:
 //
 // 1. Collection: users
-//    Document ID: {userId} (matches Firebase Auth UID)
+//    Document ID: {userId} (Firebase Auth UID)
 //    Fields:
-//      - uid: string (optional, must match userId if provided)
+//      - uid: string (optional, must match userId)
 //      - fullName: string (optional, max 150 chars)
 //      - email: string (optional, max 254 chars)
-//      - photoURL: string or null (optional, max 2048 chars)
+//      - emailVerified: bool (optional)
+//      - photoURL: string or null (optional, max 120000 chars for URL or compressed data URI)
 //      - username: string or null (optional, max 60 chars)
 //      - bio: string or null (optional, max 2500 chars)
 //      - location: string or null (optional, max 150 chars)
@@ -30,7 +31,7 @@ rules_version = '2';
 //      - ownerId: string (required/optional, owner UID)
 //      - username: string (optional, slug max 100 chars)
 //      - slug: string (optional, slug max 100 chars)
-//      - title: string (required/optional, max 200 chars)
+//      - title: string (optional, max 200 chars)
 //      - professionalTitle: string (optional, max 200 chars)
 //      - description: string (optional, max 10000 chars)
 //      - isPublished: bool (optional)
@@ -43,6 +44,8 @@ rules_version = '2';
 //      - themeSettings: map (optional)
 //      - customThemeSettings: map (optional)
 //      - sections: list (optional, max 50 items)
+//      - personalInfo: map (optional, includes fullName, professionalTitle, avatarUrl, etc.)
+//      - about: map (optional)
 //      - projects: list (optional, max 100 items)
 //      - experience: list (optional, max 100 items)
 //      - education: list (optional, max 100 items)
@@ -51,10 +54,14 @@ rules_version = '2';
 //      - certifications: list (optional, max 100 items)
 //      - testimonials: list (optional, max 100 items)
 //      - services: list (optional, max 100 items)
-//      - customSections: list (optional, max 50 items)
-//      - personalInfo: map (optional)
-//      - about: map (optional)
 //      - socialLinks: map (optional)
+//      - resumeUrl: string or null (optional, max 2048 chars)
+//      - resumeURL: string or null (optional, max 2048 chars)
+//      - profileImage: string or null (optional, max 120000 chars for URL or compressed data URI)
+//      - dynamicSections: list (optional, max 50 items)
+//      - customSections: list (optional, max 50 items)
+//      - seoTitle: string (optional, max 200 chars)
+//      - seoDescription: string (optional, max 5000 chars)
 //
 // 3. Collection: usernames
 //    Document ID: {username} (normalized username slug)
@@ -126,8 +133,9 @@ service cloud.firestore {
       return (!('uid' in data) || (data.uid is string && data.uid == userId))
         && (!('fullName' in data) || (data.fullName is string && data.fullName.size() <= 150))
         && (!('email' in data) || (data.email is string && data.email.size() <= 254))
+        && (!('emailVerified' in data) || data.emailVerified is bool)
         && (!('username' in data) || data.username == null || (data.username is string && data.username.size() <= 60))
-        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2048))
+        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 120000))
         && (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 2500))
         && (!('location' in data) || data.location == null || (data.location is string && data.location.size() <= 150))
         && (!('onboardingCompleted' in data) || data.onboardingCompleted is bool)
@@ -144,23 +152,50 @@ service cloud.firestore {
         && (!('professionalTitle' in data) || (data.professionalTitle is string && data.professionalTitle.size() <= 200))
         && (!('isPublished' in data) || data.isPublished is bool)
         && (!('published' in data) || data.published is bool)
+        && (!('publishedAt' in data) || data.publishedAt == null || data.publishedAt is string || data.publishedAt is timestamp)
         && (!('themeId' in data) || (data.themeId is string && data.themeId.size() <= 60))
         && (!('selectedTheme' in data) || (data.selectedTheme is string && data.selectedTheme.size() <= 60))
+        && (!('themeSettings' in data) || data.themeSettings is map)
+        && (!('customThemeSettings' in data) || data.customThemeSettings is map)
         && (!('sections' in data) || (data.sections is list && data.sections.size() <= 50))
+        && (!('personalInfo' in data) || data.personalInfo is map)
+        && (!('about' in data) || data.about is map)
         && (!('projects' in data) || (data.projects is list && data.projects.size() <= 100))
-        && (!('skills' in data) || (data.skills is list && data.skills.size() <= 200));
+        && (!('experience' in data) || (data.experience is list && data.experience.size() <= 100))
+        && (!('education' in data) || (data.education is list && data.education.size() <= 100))
+        && (!('skills' in data) || (data.skills is list && data.skills.size() <= 200))
+        && (!('achievements' in data) || (data.achievements is list && data.achievements.size() <= 100))
+        && (!('certifications' in data) || (data.certifications is list && data.certifications.size() <= 100))
+        && (!('testimonials' in data) || (data.testimonials is list && data.testimonials.size() <= 100))
+        && (!('services' in data) || (data.services is list && data.services.size() <= 100))
+        && (!('socialLinks' in data) || data.socialLinks is map)
+        && (!('resumeUrl' in data) || data.resumeUrl == null || (data.resumeUrl is string && data.resumeUrl.size() <= 2048))
+        && (!('resumeURL' in data) || data.resumeURL == null || (data.resumeURL is string && data.resumeURL.size() <= 2048))
+        && (!('profileImage' in data) || data.profileImage == null || (data.profileImage is string && data.profileImage.size() <= 120000))
+        && (!('dynamicSections' in data) || (data.dynamicSections is list && data.dynamicSections.size() <= 50))
+        && (!('customSections' in data) || (data.customSections is list && data.customSections.size() <= 50))
+        && (!('seoTitle' in data) || (data.seoTitle is string && data.seoTitle.size() <= 200))
+        && (!('seoDescription' in data) || (data.seoDescription is string && data.seoDescription.size() <= 5000))
+        && (!('createdAt' in data) || data.createdAt is string || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is string || data.updatedAt is timestamp)
+        && (!('userId' in data) || (data.userId is string && data.userId.size() <= 128))
+        && (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() <= 128));
     }
 
     function isValidUsernameDoc(data, username) {
       return (!('username' in data) || (data.username is string && data.username.size() <= 100))
         && (!('slug' in data) || (data.slug is string && data.slug.size() <= 100))
-        && (!('portfolioId' in data) || (data.portfolioId is string && data.portfolioId.size() <= 100));
+        && (!('portfolioId' in data) || (data.portfolioId is string && data.portfolioId.size() <= 100))
+        && (!('userId' in data) || (data.userId is string && data.userId.size() <= 128))
+        && (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() <= 128));
     }
 
     function isValidDomainDoc(data, domain) {
       return (!('domain' in data) || (data.domain is string && data.domain.size() <= 253))
         && (!('domainId' in data) || (data.domainId is string && data.domainId.size() <= 260))
         && (!('portfolioId' in data) || (data.portfolioId is string && data.portfolioId.size() <= 100))
+        && (!('userId' in data) || (data.userId is string && data.userId.size() <= 128))
+        && (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() <= 128))
         && (!('verificationStatus' in data) || data.verificationStatus in ['pending', 'verified', 'failed']);
     }
 
@@ -173,41 +208,53 @@ service cloud.firestore {
       allow read: if isOwner(userId);
 
       allow create: if isOwner(userId)
-                    && (!('uid' in request.resource.data) || request.resource.data.uid == userId)
                     && isValidUserDoc(request.resource.data, userId);
 
       allow update: if isOwner(userId)
-                    && (!('uid' in request.resource.data) || request.resource.data.uid == userId)
                     && isValidUserDoc(request.resource.data, userId);
 
-      allow delete: if false; // Denied to protect account data from inadvertent deletion
+      allow delete: if false;
     }
 
     // 2. Portfolios collection: Multi-tenant portfolios
     match /portfolios/{portfolioId} {
-      // Public read if portfolio is marked published; owner read if draft
-      allow read: if (resource.data.get('isPublished', false) == true || resource.data.get('published', false) == true)
-                  || (isAuthenticated() && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid));
+      // Allow existence check for non-existent documents (resource == null),
+      // public read for published portfolios, and authenticated owner read for drafts/collection queries.
+      allow read: if resource == null
+                  || (('isPublished' in resource.data && resource.data.isPublished == true) || ('published' in resource.data && resource.data.published == true))
+                  || (isAuthenticated() && (
+                       ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                       ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+                     ));
 
       // Creation: must be authenticated, set ownership to self, and match document portfolioId
       allow create: if isAuthenticated()
                     && request.resource.data.portfolioId == portfolioId
-                    && (request.resource.data.get('ownerId', '') == request.auth.uid || request.resource.data.get('userId', '') == request.auth.uid)
-                    && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid)
-                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+                    && (
+                      ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid)
+                    )
                     && isValidPortfolioDoc(request.resource.data, portfolioId);
 
       // Update: strictly restricted to portfolio owner; cannot transfer ownership or reassign portfolioId
       allow update: if isAuthenticated()
-                    && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid)
+                    && (
+                      ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+                    )
+                    && (
+                      ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid)
+                    )
                     && request.resource.data.portfolioId == portfolioId
-                    && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid)
-                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
                     && isValidPortfolioDoc(request.resource.data, portfolioId);
 
       // Deletion: strictly restricted to portfolio owner
       allow delete: if isAuthenticated()
-                    && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
+                    && (
+                      ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+                    );
     }
 
     // 3. Usernames collection: Unique slug reservation
@@ -217,20 +264,26 @@ service cloud.firestore {
 
       // Reservation requires authentication and claiming for self
       allow create: if isAuthenticated()
-                    && (request.resource.data.get('ownerId', '') == request.auth.uid || request.resource.data.get('userId', '') == request.auth.uid)
-                    && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid)
-                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+                    && (request.resource.data.userId == request.auth.uid || request.resource.data.ownerId == request.auth.uid)
                     && isValidUsernameDoc(request.resource.data, username);
 
       // Mutation and deletion restricted to the reserving owner
       allow update: if isAuthenticated()
-                    && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid)
-                    && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid)
-                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+                    && (
+                      ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+                    )
+                    && (
+                      ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid)
+                    )
                     && isValidUsernameDoc(request.resource.data, username);
 
       allow delete: if isAuthenticated()
-                    && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
+                    && (
+                      ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+                    );
     }
 
     // 4. Themes collection: Read-only catalog for clients
@@ -241,16 +294,16 @@ service cloud.firestore {
 
     // 5. Analytics collection: Telemetry & view counters
     match /analytics/{portfolioId} {
-      // Telemetry readable by authenticated portfolio owner
-      allow read: if isAuthenticated() && (
-        !exists(/databases/$(database)/documents/portfolios/$(portfolioId)) ||
-        get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.get('userId', '') == request.auth.uid ||
-        get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.get('ownerId', '') == request.auth.uid ||
-        (resource != null && (
-          resource.data.get('userId', '') == request.auth.uid ||
-          resource.data.get('ownerId', '') == request.auth.uid
-        ))
-      );
+      // Safe existence check and telemetry read restricted to authenticated portfolio owner
+      allow read: if resource == null
+                  || (isAuthenticated() && (
+                       ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                       ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
+                       (exists(/databases/$(database)/documents/portfolios/$(portfolioId)) && (
+                         ('userId' in get(/databases/$(database)/documents/portfolios/$(portfolioId)).data && request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.userId) ||
+                         ('ownerId' in get(/databases/$(database)/documents/portfolios/$(portfolioId)).data && request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId)
+                       ))
+                     ));
 
       // Increments permitted for public page views and telemetry ingestion
       allow write: if true;
@@ -258,22 +311,33 @@ service cloud.firestore {
 
     // 6. Custom domains collection: Domain mapping and verification
     match /customDomains/{domain} {
+      // Public read for domain mapping lookup
       allow read: if true;
 
+      // Owner-only writes
       allow create: if isAuthenticated()
-                    && (request.resource.data.get('ownerId', '') == request.auth.uid || request.resource.data.get('userId', '') == request.auth.uid)
-                    && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid)
-                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+                    && (
+                      ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid)
+                    )
                     && isValidDomainDoc(request.resource.data, domain);
 
       allow update: if isAuthenticated()
-                    && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid)
-                    && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid)
-                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+                    && (
+                      ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+                    )
+                    && (
+                      ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid)
+                    )
                     && isValidDomainDoc(request.resource.data, domain);
 
       allow delete: if isAuthenticated()
-                    && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
+                    && (
+                      ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+                      ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+                    );
     }
   }
 }

@@ -28,7 +28,8 @@ import { DynamicEntryEditorModal } from "@/components/sections/DynamicEntryEdito
 import {
   THEME_REGISTRY,
   PRESET_COLOR_PALETTES,
-  INITIAL_DEFAULT_PORTFOLIO,
+  createEmptyPortfolio,
+  SAMPLE_DEMO_PORTFOLIO,
 } from "@/lib/utils/defaults";
 import { slugify } from "@/lib/utils/slugify";
 import { getPortfolioUrl, getDisplayPortfolioUrl } from "@/lib/utils/url";
@@ -118,23 +119,39 @@ export default function VisualEditorPage({
       try {
         const item = await getPortfolioById(portfolioId);
         if (item) {
+          if (user?.uid) {
+            item.userId = user.uid;
+            item.ownerId = user.uid;
+          }
           setData(item);
           historyRef.current = [item];
           historyIndexRef.current = 0;
         } else {
-          // Fallback initial
-          const seeded = { ...INITIAL_DEFAULT_PORTFOLIO, portfolioId };
+          // Initialize clean empty portfolio with current user identity
+          const baseName = user?.displayName || "";
+          const baseEmail = user?.email || "";
+          const usernameSlug = slugify(baseName || baseEmail.split("@")[0] || "creator");
+          const seeded = createEmptyPortfolio(
+            user?.uid || "draft",
+            usernameSlug,
+            baseName,
+            baseEmail
+          );
+          seeded.portfolioId = portfolioId;
           setData(seeded);
           historyRef.current = [seeded];
           historyIndexRef.current = 0;
         }
+      } catch (err: any) {
+        console.error("Failed to load portfolio:", err);
+        setNotification(err?.message || "Failed to load portfolio from database.");
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, [portfolioId]);
+  }, [portfolioId, user]);
 
   // Push to history stack & trigger debounced auto-save
   const updateData = (updater: (prev: PortfolioData) => PortfolioData) => {
@@ -157,13 +174,18 @@ export default function VisualEditorPage({
       saveTimeoutRef.current = setTimeout(async () => {
         setSaveStatus("saving");
         try {
-          await savePortfolio(next);
+          const payload = {
+            ...next,
+            userId: user?.uid || next.userId,
+            ownerId: user?.uid || next.ownerId,
+          };
+          await savePortfolio(payload);
           setSaveStatus("saved");
         } catch (err: any) {
           console.error("Auto-save error:", err);
           setSaveStatus("unsaved");
           setNotification(err?.message || "Failed to auto-save changes.");
-          setTimeout(() => setNotification(null), 4000);
+          setTimeout(() => setNotification(null), 5000);
         }
       }, 1200);
 
@@ -197,16 +219,66 @@ export default function VisualEditorPage({
     if (!data) return;
     setSaveStatus("saving");
     try {
-      await savePortfolio(data);
+      const payload = {
+        ...data,
+        userId: user?.uid || data.userId,
+        ownerId: user?.uid || data.ownerId,
+      };
+      await savePortfolio(payload);
       setSaveStatus("saved");
-      setNotification("All changes safely saved.");
-      setTimeout(() => setNotification(null), 3000);
+      setNotification("All changes safely saved to database.");
+      setTimeout(() => setNotification(null), 3500);
     } catch (err: any) {
       console.error("Manual save failed:", err);
       setSaveStatus("unsaved");
-      setNotification(err?.message || "Failed to save changes.");
-      setTimeout(() => setNotification(null), 4000);
+      setNotification(err?.message || "Failed to save changes. Please check permissions.");
+      setTimeout(() => setNotification(null), 6000);
     }
+  };
+
+  const handleLoadSampleData = () => {
+    if (!user) return;
+    const usernameSlug = slugify(
+      user.displayName || user.email?.split("@")[0] || data?.username || "creator"
+    );
+    const sample: PortfolioData = {
+      ...SAMPLE_DEMO_PORTFOLIO,
+      portfolioId,
+      userId: user.uid,
+      ownerId: user.uid,
+      username: usernameSlug,
+      slug: usernameSlug,
+      title: `${user.displayName || "My"} Portfolio`,
+      personalInfo: {
+        ...SAMPLE_DEMO_PORTFOLIO.personalInfo,
+        fullName: user.displayName || SAMPLE_DEMO_PORTFOLIO.personalInfo.fullName,
+        email: user.email || SAMPLE_DEMO_PORTFOLIO.personalInfo.email,
+      },
+    };
+    updateData(() => sample);
+    setNotification("Sample creative profile loaded into workspace.");
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleClearToEmpty = () => {
+    if (!user) return;
+    const usernameSlug = slugify(
+      user.displayName || user.email?.split("@")[0] || data?.username || "creator"
+    );
+    const clean = createEmptyPortfolio(
+      user.uid,
+      usernameSlug,
+      user.displayName || "",
+      user.email || ""
+    );
+    clean.portfolioId = portfolioId;
+    if (data) {
+      clean.themeId = data.themeId;
+      clean.themeSettings = data.themeSettings;
+    }
+    updateData(() => clean);
+    setNotification("Reset to clean empty portfolio.");
+    setTimeout(() => setNotification(null), 3000);
   };
 
   // Dynamic Section Handlers
@@ -457,7 +529,7 @@ export default function VisualEditorPage({
           </div>
         </div>
 
-        {/* Right: Auto-Save Status, Preview & Publish */}
+        {/* Right: Auto-Save Status, Manual Save, Preview & Publish */}
         <div className="flex items-center space-x-3">
           {/* Auto-save badge */}
           <div className="hidden md:flex items-center space-x-1.5 text-[11px] font-mono text-editorial-muted">
@@ -472,6 +544,18 @@ export default function VisualEditorPage({
             />
             <span className="capitalize">{saveStatus}</span>
           </div>
+
+          {/* Explicit Manual Save Button */}
+          <button
+            type="button"
+            onClick={handleManualSave}
+            disabled={saveStatus === "saving"}
+            className="inline-flex items-center space-x-1 border border-editorial-border bg-white px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-editorial-charcoal hover:bg-editorial-sand/30 disabled:opacity-50"
+            title="Save all changes directly to database"
+          >
+            <Save className={`h-3 w-3 ${saveStatus === "saving" ? "animate-pulse" : ""}`} />
+            <span>{saveStatus === "saving" ? "Saving..." : "Save"}</span>
+          </button>
 
           <Link
             href={getPortfolioUrl(data.username)}
@@ -615,7 +699,7 @@ export default function VisualEditorPage({
                     {/* Profile Photo Media Control */}
                     <MediaAssetControl
                       label="Profile Photo"
-                      description="Paste an image URL for permanent portfolio display or select a file for temporary preview."
+                      description="Upload a photo from your device (permanently saved) or paste an image URL."
                       value={data.personalInfo.avatarUrl || ""}
                       onChange={(url) =>
                         updateData((prev) => ({
@@ -1598,14 +1682,36 @@ export default function VisualEditorPage({
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-editorial-border">
+                <div className="pt-4 border-t border-editorial-border space-y-3">
                   <button
                     onClick={handleManualSave}
-                    className="w-full flex items-center justify-center space-x-1.5 bg-editorial-charcoal text-editorial-ivory py-2.5 text-xs font-mono uppercase tracking-wider"
+                    disabled={saveStatus === "saving"}
+                    className="w-full flex items-center justify-center space-x-1.5 bg-editorial-charcoal text-editorial-ivory py-2.5 text-xs font-mono uppercase tracking-wider hover:bg-editorial-softdark transition-colors disabled:opacity-50"
                   >
                     <Save className="h-3.5 w-3.5" />
-                    <span>Save All Changes</span>
+                    <span>{saveStatus === "saving" ? "Saving Changes..." : "Save All Changes"}</span>
                   </button>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleLoadSampleData}
+                      className="inline-flex items-center justify-center space-x-1 border border-editorial-border bg-white px-2 py-2 text-[10px] font-mono uppercase tracking-wider text-editorial-charcoal hover:bg-editorial-sand/30"
+                      title="Fill workspace with rich sample creative portfolio data"
+                    >
+                      <Sparkles className="h-3 w-3 text-amber-600" />
+                      <span>Load Sample</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearToEmpty}
+                      className="inline-flex items-center justify-center space-x-1 border border-editorial-border bg-white px-2 py-2 text-[10px] font-mono uppercase tracking-wider text-editorial-muted hover:text-editorial-charcoal"
+                      title="Clear all fields to clean slate"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      <span>Clear All</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

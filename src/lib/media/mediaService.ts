@@ -187,6 +187,95 @@ export function isTemporaryBlobUrl(url?: string | null): boolean {
 }
 
 /**
+ * Checks if a given URL is a permanent embedded Data URI
+ */
+export function isPermanentDataUri(url?: string | null): boolean {
+  return Boolean(url && url.startsWith("data:image/"));
+}
+
+/**
+ * Compresses and resizes a local image file into an optimized, permanent Data URI
+ * that persists directly in Firestore without reliance on temporary browser session blobs.
+ * 
+ * Standardizes avatar/project images to max 600x600px, WebP format (or JPEG fallback),
+ * maintaining sharp high-DPI quality while keeping document payloads under ~50 KB.
+ */
+export async function processLocalImageForStorage(
+  file: File,
+  maxDimension = 600,
+  quality = 0.82
+): Promise<string> {
+  const validation = validateLocalFile(file, "image");
+  if (!validation.valid) {
+    throw new Error(validation.error || "Invalid image file");
+  }
+
+  if (typeof window === "undefined" || !window.FileReader) {
+    throw new Error("Local image processing is only available in the browser.");
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read local image file."));
+    reader.onload = (e) => {
+      const src = e.target?.result as string;
+      if (!src) {
+        return reject(new Error("Image source could not be resolved."));
+      }
+
+      if (file.type === "image/svg+xml") {
+        if (src.length > 80_000) {
+          return reject(new Error("SVG file is too large. Please select an SVG under 80KB."));
+        }
+        return resolve(src);
+      }
+
+      const img = new Image();
+      img.onerror = () => reject(new Error("Image decoding failed."));
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          return reject(new Error("Failed to initialize image canvas context."));
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        let dataUrl = canvas.toDataURL("image/webp", quality);
+        if (!dataUrl.startsWith("data:image/webp")) {
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+
+        // Cap size to safeguard Firestore 1MB limits
+        if (dataUrl.length > 95_000) {
+          dataUrl = canvas.toDataURL("image/jpeg", 0.65);
+        }
+
+        resolve(dataUrl);
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * Pluggable Storage Provider Registry
  * Allows easily registering Firebase Storage (when Blaze is enabled) or Cloudinary/S3
  * without touching component code.

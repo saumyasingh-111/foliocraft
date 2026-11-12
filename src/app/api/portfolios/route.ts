@@ -5,7 +5,7 @@ import {
   checkSlugAvailability,
 } from "@/lib/firebase/firestore";
 import { PortfolioData } from "@/themes/types";
-import { INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
+import { createEmptyPortfolio } from "@/lib/utils/defaults";
 import { slugify } from "@/lib/utils/slugify";
 
 export async function GET(request: NextRequest) {
@@ -51,11 +51,13 @@ export async function POST(request: NextRequest) {
     const finalSlug = isAvailable ? slug : `${slug}-${Math.floor(Math.random() * 900 + 100)}`;
 
     const newPortfolio: PortfolioData = {
-      ...INITIAL_DEFAULT_PORTFOLIO,
+      ...createEmptyPortfolio(userId, finalSlug, title, ""),
       portfolioId,
       userId,
+      ownerId: userId,
       title,
       username: finalSlug,
+      slug: finalSlug,
       themeId: themeId || "minimal-editorial",
       isPublished: false,
       publishedAt: null,

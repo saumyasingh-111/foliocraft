@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/firebase/auth-context";
 import { updateUserDisplayName, sendUserPasswordReset } from "@/lib/firebase/auth";
+import { getUserPortfolios, savePortfolio } from "@/lib/db/portfolios";
 import { User, Mail, Shield, Save, Check, AlertCircle, KeyRound } from "lucide-react";
 
 export default function SettingsPage() {
@@ -30,6 +31,28 @@ export default function SettingsPage() {
 
     try {
       await updateUserDisplayName(displayName);
+
+      // Keep user's active portfolio in sync
+      if (user?.uid) {
+        try {
+          const portfolios = await getUserPortfolios(user.uid);
+          if (portfolios.length > 0) {
+            const primary = portfolios[0];
+            if (primary.personalInfo.fullName !== displayName.trim()) {
+              await savePortfolio({
+                ...primary,
+                personalInfo: {
+                  ...primary.personalInfo,
+                  fullName: displayName.trim(),
+                },
+              });
+            }
+          }
+        } catch (syncErr) {
+          console.warn("[Settings] Portfolio sync warning:", syncErr);
+        }
+      }
+
       setSuccessMessage("Account profile updated successfully.");
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: unknown) {

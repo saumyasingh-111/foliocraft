@@ -305,7 +305,80 @@ export const PRESET_COLOR_PALETTES = [
   },
 ];
 
-export const INITIAL_DEFAULT_PORTFOLIO: PortfolioData = {
+export function createEmptyPortfolio(
+  userId: string,
+  usernameSlug: string,
+  name?: string,
+  email?: string
+): PortfolioData {
+  const cleanName = (name || "").trim();
+  const cleanEmail = (email || "").trim();
+  const portfolioId = "p-" + userId.slice(0, 8) + "-" + Math.random().toString(36).substring(2, 8);
+  const now = new Date().toISOString();
+
+  return {
+    portfolioId,
+    userId,
+    ownerId: userId,
+    username: usernameSlug.toLowerCase().trim() || "creative",
+    slug: usernameSlug.toLowerCase().trim() || "creative",
+    title: cleanName ? `${cleanName}'s Portfolio` : "My Portfolio",
+    professionalTitle: "",
+    description: "",
+    isPublished: false,
+    published: false,
+    publishedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    themeId: "minimal-editorial",
+    themeSettings: THEME_REGISTRY[0].defaultSettings,
+    sections: [
+      { id: "sec-hero", type: "hero", title: "Hero Introduction", isVisible: true, order: 0 },
+      { id: "sec-about", type: "about", title: "About Me", isVisible: true, order: 1 },
+      { id: "sec-projects", type: "projects", title: "Selected Works", isVisible: true, order: 2 },
+      { id: "sec-experience", type: "experience", title: "Experience", isVisible: true, order: 3 },
+      { id: "sec-skills", type: "skills", title: "Skills & Specialties", isVisible: true, order: 4 },
+      { id: "sec-education", type: "education", title: "Education", isVisible: true, order: 5 },
+      { id: "sec-achievements", type: "achievements", title: "Honors & Press", isVisible: true, order: 6 },
+      { id: "sec-contact", type: "contact", title: "Get in Touch", isVisible: true, order: 7 },
+    ],
+    personalInfo: {
+      fullName: cleanName,
+      professionalTitle: "",
+      avatarUrl: "",
+      location: "",
+      email: cleanEmail,
+      phone: "",
+      tagline: "",
+      heroHeadline: "",
+      heroSubheadline: "",
+      statusBadge: "",
+    },
+    about: {
+      bioLong: "",
+      careerInterests: [],
+      areasOfExpertise: [],
+      yearsOfExperience: 0,
+    },
+    education: [],
+    experience: [],
+    skills: [],
+    projects: [],
+    achievements: [],
+    certifications: [],
+    testimonials: [],
+    services: [],
+    socialLinks: {
+      email: cleanEmail,
+    },
+    resumeUrl: null,
+    resumeURL: null,
+    profileImage: null,
+    dynamicSections: [],
+  };
+}
+
+export const SAMPLE_DEMO_PORTFOLIO: PortfolioData = {
   portfolioId: "draft-portfolio-1",
   userId: "demo-user",
   username: "alex-morgan",
@@ -472,3 +545,7 @@ export const INITIAL_DEFAULT_PORTFOLIO: PortfolioData = {
   profileImage: null,
   dynamicSections: [],
 };
+
+// Aliased for legacy references; production creation uses createEmptyPortfolio
+export const INITIAL_DEFAULT_PORTFOLIO: PortfolioData = SAMPLE_DEMO_PORTFOLIO;
+

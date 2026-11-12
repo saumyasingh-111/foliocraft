@@ -6,6 +6,8 @@ import {
   createTemporaryPreview,
   revokeTemporaryPreview,
   isTemporaryBlobUrl,
+  isPermanentDataUri,
+  processLocalImageForStorage,
 } from "@/lib/media/mediaService";
 import {
   Link as LinkIcon,
@@ -52,17 +54,23 @@ export function MediaAssetControl({
   variant = "cover",
 }: MediaAssetControlProps) {
   const [activeMode, setActiveMode] = useState<"url" | "local">("url");
-  const [inputUrl, setInputUrl] = useState(value || "");
+  const [inputUrl, setInputUrl] = useState(() => (value && !value.startsWith("data:") ? value : ""));
   const [urlError, setUrlError] = useState<string | null>(null);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [showSamples, setShowSamples] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const previousBlobRef = useRef<string | null>(null);
 
   const isCurrentTemporary = isTemporaryBlobUrl(value);
+  const isPermanentEmbedded = isPermanentDataUri(value);
 
   // Sync internal input when external value prop changes
   useEffect(() => {
-    setInputUrl(value || "");
+    if (value && !value.startsWith("data:") && !value.startsWith("blob:")) {
+      setInputUrl(value);
+    } else if (!value) {
+      setInputUrl("");
+    }
     setImageLoadError(false);
   }, [value]);
 
@@ -99,21 +107,41 @@ export function MediaAssetControl({
     onChange(validation.normalizedUrl || trimmed);
   };
 
-  const handleLocalFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLocalFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      if (previousBlobRef.current) {
-        revokeTemporaryPreview(previousBlobRef.current);
-      }
-      const preview = createTemporaryPreview(file, type);
-      previousBlobRef.current = preview.previewUrl;
-      setImageLoadError(false);
+    if (type === "image") {
+      setIsProcessing(true);
       setUrlError(null);
-      onChange(preview.previewUrl);
-    } catch (err: unknown) {
-      setUrlError(err instanceof Error ? err.message : "Failed to load local file preview.");
+      try {
+        if (previousBlobRef.current) {
+          revokeTemporaryPreview(previousBlobRef.current);
+          previousBlobRef.current = null;
+        }
+        const permanentDataUri = await processLocalImageForStorage(file, variant === "avatar" ? 500 : 900);
+        setImageLoadError(false);
+        onChange(permanentDataUri);
+      } catch (err: unknown) {
+        console.error("Image processing error:", err);
+        setUrlError(err instanceof Error ? err.message : "Failed to process image file.");
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      // PDF document
+      try {
+        if (previousBlobRef.current) {
+          revokeTemporaryPreview(previousBlobRef.current);
+        }
+        const preview = createTemporaryPreview(file, type);
+        previousBlobRef.current = preview.previewUrl;
+        setImageLoadError(false);
+        setUrlError(null);
+        onChange(preview.previewUrl);
+      } catch (err: unknown) {
+        setUrlError(err instanceof Error ? err.message : "Failed to load local file preview.");
+      }
     }
   };
 
@@ -142,7 +170,12 @@ export function MediaAssetControl({
 
         {/* Status Badge */}
         {value ? (
-          isCurrentTemporary ? (
+          isPermanentEmbedded ? (
+            <span className="inline-flex items-center space-x-1 border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-mono text-emerald-800 uppercase tracking-wider">
+              <Check className="h-3 w-3 text-emerald-600" />
+              <span>Permanent Upload</span>
+            </span>
+          ) : isCurrentTemporary ? (
             <span className="inline-flex items-center space-x-1 border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-mono text-amber-800 uppercase tracking-wider">
               <AlertTriangle className="h-3 w-3 text-amber-600" />
               <span>Session Preview</span>
@@ -160,19 +193,6 @@ export function MediaAssetControl({
       <div className="flex items-center space-x-1 border-b border-editorial-border/60 pb-2">
         <button
           type="button"
-          onClick={() => setActiveMode("url")}
-          className={`inline-flex items-center space-x-1.5 px-3 py-1 text-xs font-mono uppercase transition-colors ${
-            activeMode === "url"
-              ? "bg-editorial-charcoal text-editorial-ivory font-medium"
-              : "text-editorial-muted hover:text-editorial-charcoal"
-          }`}
-        >
-          <LinkIcon className="h-3 w-3" />
-          <span>Hosted URL (Permanent)</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveMode("local")}
           className={`inline-flex items-center space-x-1.5 px-3 py-1 text-xs font-mono uppercase transition-colors ${
             activeMode === "local"
@@ -181,7 +201,20 @@ export function MediaAssetControl({
           }`}
         >
           <Upload className="h-3 w-3" />
-          <span>Local File (Session Preview)</span>
+          <span>Upload From Device</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMode("url")}
+          className={`inline-flex items-center space-x-1.5 px-3 py-1 text-xs font-mono uppercase transition-colors ${
+            activeMode === "url"
+              ? "bg-editorial-charcoal text-editorial-ivory font-medium"
+              : "text-editorial-muted hover:text-editorial-charcoal"
+          }`}
+        >
+          <LinkIcon className="h-3 w-3" />
+          <span>Hosted URL Link</span>
         </button>
       </div>
 
@@ -259,40 +292,47 @@ export function MediaAssetControl({
         </div>
       )}
 
-      {/* MODE 2: Local File Preview */}
+      {/* MODE 2: Device Upload */}
       {activeMode === "local" && (
         <div className="space-y-2.5">
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-editorial-border bg-white p-5 cursor-pointer hover:bg-editorial-sand/20 transition-colors">
-            <Upload className="h-5 w-5 text-editorial-mocha mb-1" />
-            <span className="text-xs font-mono uppercase tracking-wider text-editorial-charcoal font-semibold">
-              Select {type === "pdf" ? "PDF Document" : "Image File"} From Device
-            </span>
-            <span className="text-[11px] text-editorial-muted mt-0.5">
-              {type === "pdf" ? "PDF up to 10MB" : "JPG, PNG, WebP up to 5MB"}
-            </span>
+            {isProcessing ? (
+              <div className="flex flex-col items-center py-2 space-y-2">
+                <div className="h-6 w-6 border-2 border-editorial-charcoal border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-mono uppercase text-editorial-muted">Optimizing & preparing photo...</span>
+              </div>
+            ) : (
+              <>
+                <Upload className="h-5 w-5 text-editorial-mocha mb-1" />
+                <span className="text-xs font-mono uppercase tracking-wider text-editorial-charcoal font-semibold">
+                  Select {type === "pdf" ? "PDF Document" : "Photo"} From Device
+                </span>
+                <span className="text-[11px] text-editorial-muted mt-0.5">
+                  {type === "pdf" ? "PDF up to 10MB" : "JPG, PNG, WebP up to 10MB"}
+                </span>
+              </>
+            )}
             <input
               type="file"
               accept={type === "pdf" ? "application/pdf,.pdf" : "image/*"}
               onChange={handleLocalFileSelect}
+              disabled={isProcessing}
               className="hidden"
             />
           </label>
 
-          {/* Explicit Notice about temporary nature */}
-          <div className="flex items-start space-x-2 border border-amber-300 bg-amber-50/80 p-2.5 text-xs text-amber-900">
-            <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-semibold text-[11px] font-mono uppercase tracking-wide">
-                Session Preview Only
-              </p>
+          {type === "image" ? (
+            <p className="text-[11px] text-editorial-muted font-sans leading-relaxed">
+              Photos uploaded from your device are automatically optimized and permanently embedded into your portfolio.
+            </p>
+          ) : (
+            <div className="flex items-start space-x-2 border border-amber-300 bg-amber-50/80 p-2.5 text-xs text-amber-900">
+              <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
               <p className="text-[11px] leading-relaxed text-amber-800">
-                This local file is previewed from your browser memory for styling. It will{" "}
-                <strong>not be visible to visitors or saved permanently</strong> across browser
-                reloads. For a permanent portfolio image, switch to the <em>Hosted URL</em> tab and
-                paste an image link.
+                To allow visitors to download your full resume PDF, provide a hosted document link (Google Drive, Dropbox, Notion, or personal site) in the <em>Hosted URL Link</em> tab.
               </p>
             </div>
-          </div>
+          )}
         </div>
       )}
 

@@ -19,7 +19,11 @@ import {
   AchievementItem,
   ThemeId,
 } from "@/themes/types";
-import { THEME_REGISTRY, INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
+import {
+  THEME_REGISTRY,
+  createEmptyPortfolio,
+  SAMPLE_DEMO_PORTFOLIO,
+} from "@/lib/utils/defaults";
 import { slugify } from "@/lib/utils/slugify";
 import { getAppDomain } from "@/lib/utils/url";
 import {
@@ -68,8 +72,12 @@ function OnboardingWizardContent() {
   const [saving, setSaving] = useState(false);
   const [slugError, setSlugError] = useState<string | null>(null);
 
-  // Draft Portfolio State
-  const [formData, setFormData] = useState<PortfolioData>(INITIAL_DEFAULT_PORTFOLIO);
+  // Draft Portfolio State (Clean empty template)
+  const [formData, setFormData] = useState<PortfolioData>(() =>
+    createEmptyPortfolio("temp", "draft", "", "")
+  );
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Load user data or initial draft
   useEffect(() => {
@@ -85,24 +93,30 @@ function OnboardingWizardContent() {
             const meta = THEME_REGISTRY.find((t) => t.id === preselectedTheme);
             if (meta) loaded.themeSettings = meta.defaultSettings;
           }
+          loaded.userId = user.uid;
+          loaded.ownerId = user.uid;
           setFormData(loaded);
         } else {
-          // Initialize fresh for user
-          const usernameSlug = slugify(user.displayName || user.email?.split("@")[0] || "creative");
-          setFormData({
-            ...INITIAL_DEFAULT_PORTFOLIO,
-            portfolioId: "p-" + Math.random().toString(36).substring(2, 9),
-            userId: user.uid,
-            username: usernameSlug,
-            title: `${user.displayName || "My"} Portfolio`,
-            themeId: preselectedTheme || "minimal-editorial",
-            personalInfo: {
-              ...INITIAL_DEFAULT_PORTFOLIO.personalInfo,
-              fullName: user.displayName || "",
-              email: user.email || "",
-            },
-          });
+          // Initialize genuinely clean empty fields for the new user
+          const usernameSlug = slugify(
+            user.displayName || user.email?.split("@")[0] || "creative"
+          );
+          const empty = createEmptyPortfolio(
+            user.uid,
+            usernameSlug,
+            user.displayName || "",
+            user.email || ""
+          );
+          if (preselectedTheme) {
+            empty.themeId = preselectedTheme;
+            const meta = THEME_REGISTRY.find((t) => t.id === preselectedTheme);
+            if (meta) empty.themeSettings = meta.defaultSettings;
+          }
+          setFormData(empty);
         }
+      } catch (err: any) {
+        console.error("Error loading onboarding data:", err);
+        setSaveError("Failed to fetch existing portfolio. Starting with a fresh draft.");
       } finally {
         setLoading(false);
       }
@@ -111,20 +125,78 @@ function OnboardingWizardContent() {
     init();
   }, [user, preselectedTheme]);
 
-  // Save intermediate state
-  const persistChanges = async (targetData = formData) => {
+  // Load sample demo data on explicit user choice
+  const handleLoadSampleData = async () => {
     if (!user) return;
+    const usernameSlug = slugify(
+      user.displayName || user.email?.split("@")[0] || formData.username || "creative"
+    );
+    const sample: PortfolioData = {
+      ...SAMPLE_DEMO_PORTFOLIO,
+      portfolioId: formData.portfolioId,
+      userId: user.uid,
+      ownerId: user.uid,
+      username: usernameSlug,
+      slug: usernameSlug,
+      title: `${user.displayName || "My"} Portfolio`,
+      personalInfo: {
+        ...SAMPLE_DEMO_PORTFOLIO.personalInfo,
+        fullName: user.displayName || SAMPLE_DEMO_PORTFOLIO.personalInfo.fullName,
+        email: user.email || SAMPLE_DEMO_PORTFOLIO.personalInfo.email,
+      },
+    };
+    setFormData(sample);
+    await persistChanges(sample);
+  };
+
+  // Clear all fields to clean slate
+  const handleClearToEmpty = async () => {
+    if (!user) return;
+    const usernameSlug = slugify(
+      user.displayName || user.email?.split("@")[0] || formData.username || "creative"
+    );
+    const clean = createEmptyPortfolio(
+      user.uid,
+      usernameSlug,
+      user.displayName || "",
+      user.email || ""
+    );
+    clean.portfolioId = formData.portfolioId;
+    clean.themeId = formData.themeId;
+    clean.themeSettings = formData.themeSettings;
+    setFormData(clean);
+    await persistChanges(clean);
+  };
+
+  // Save intermediate state
+  const persistChanges = async (targetData = formData): Promise<boolean> => {
+    if (!user) return false;
+    setSaveError(null);
     try {
-      await savePortfolio(targetData);
-    } catch (err) {
+      await savePortfolio({
+        ...targetData,
+        userId: user.uid,
+        ownerId: user.uid,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+      return true;
+    } catch (err: any) {
       console.error("Save error:", err);
+      setSaveError(err?.message || "Failed to save changes to database. Please check your connection.");
+      return false;
     }
   };
 
   const handleNext = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
-      await persistChanges();
+      const saved = await persistChanges();
+      if (!saved) {
+        // Halt if save failed so user is aware of database persistence issue
+        return;
+      }
 
       if (currentStep < STEPS.length) {
         setCurrentStep((prev) => prev + 1);
@@ -286,16 +358,50 @@ function OnboardingWizardContent() {
               {STEPS[currentStep - 1].title}
             </h1>
           </div>
-          <button
-            onClick={() => {
-              persistChanges();
-              router.push("/dashboard");
-            }}
-            className="text-xs font-mono uppercase tracking-wider text-editorial-muted hover:text-editorial-charcoal"
-          >
-            Save & Exit to Dashboard
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={handleLoadSampleData}
+              className="inline-flex items-center space-x-1.5 border border-editorial-border bg-white px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider text-editorial-charcoal hover:bg-editorial-sand/30"
+              title="Fill fields with sample creative portfolio data"
+            >
+              <Sparkles className="h-3 w-3 text-amber-600" />
+              <span>Load Sample Data</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClearToEmpty}
+              className="inline-flex items-center space-x-1.5 border border-editorial-border bg-white px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider text-editorial-muted hover:text-editorial-charcoal"
+              title="Reset all fields to clean empty draft"
+            >
+              <Trash2 className="h-3 w-3" />
+              <span>Clear to Empty</span>
+            </button>
+            <button
+              onClick={() => {
+                persistChanges();
+                router.push("/dashboard");
+              }}
+              className="text-xs font-mono uppercase tracking-wider text-editorial-muted hover:text-editorial-charcoal ml-2"
+            >
+              Save & Exit
+            </button>
+          </div>
         </div>
+
+        {/* Database Persistence Status & Alerts */}
+        {saveError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-mono flex items-center space-x-2">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-500" />
+            <span>{saveError}</span>
+          </div>
+        )}
+        {saveSuccess && (
+          <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-mono flex items-center space-x-2">
+            <Check className="h-4 w-4 flex-shrink-0 text-emerald-500" />
+            <span>Progress saved to database.</span>
+          </div>
+        )}
 
         {/* Visual Progress Bar */}
         <div className="h-1.5 w-full bg-editorial-border overflow-hidden">
@@ -348,7 +454,7 @@ function OnboardingWizardContent() {
 
             <MediaAssetControl
               label="Profile Photograph"
-              description="Enter a hosted image URL (permanent) or select a local photo for temporary session preview."
+              description="Upload a photo from your device (permanently saved) or provide an external image URL."
               value={formData.personalInfo.avatarUrl || ""}
               onChange={(url) =>
                 setFormData((prev) => ({

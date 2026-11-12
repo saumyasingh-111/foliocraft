@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { getPortfolioByUsername } from "@/lib/db/portfolios";
 import { ThemeRenderer } from "@/themes/ThemeRenderer";
-import { INITIAL_DEFAULT_PORTFOLIO } from "@/lib/utils/defaults";
 import { getPortfolioUrl } from "@/lib/utils/url";
 import { ArrowLeft, Sparkles, Globe } from "lucide-react";
 
@@ -55,12 +54,7 @@ export default async function PublicPortfolioPage({ params }: Props) {
   const { username } = await params;
   
   // Lookup published portfolio
-  let portfolio = await getPortfolioByUsername(username);
-
-  // If in local dev and username is 'alex-morgan', fallback to default seed
-  if (!portfolio && username.toLowerCase() === "alex-morgan") {
-    portfolio = INITIAL_DEFAULT_PORTFOLIO;
-  }
+  const portfolio = await getPortfolioByUsername(username);
 
   // Handle Missing or Unpublished Portfolios Gracefully
   if (!portfolio) {

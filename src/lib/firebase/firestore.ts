@@ -15,9 +15,9 @@ import {
   increment,
   runTransaction,
 } from "firebase/firestore";
-import { getClientDb, isFirebaseConfigured } from "./client";
+import { getClientDb, getClientAuth, isFirebaseConfigured } from "./client";
 import { PortfolioData, ThemeId, ThemeSettings, SectionConfig } from "@/themes/types";
-import { THEME_REGISTRY, INITIAL_DEFAULT_PORTFOLIO } from "../utils/defaults";
+import { THEME_REGISTRY, createEmptyPortfolio, SAMPLE_DEMO_PORTFOLIO } from "../utils/defaults";
 
 // Utility timeout wrapper to prevent any Firestore call from hanging indefinitely
 export function withTimeout<T>(
@@ -82,14 +82,16 @@ export async function createOrUpdateUserProfile(
     throw new Error("Firestore client is not configured.");
   }
 
+  const auth = getClientAuth();
+  const currentEmail = auth?.currentUser?.email || "";
   const userRef = doc(db, "users", uid);
   const now = new Date().toISOString();
 
   const profileData: UserProfileDocument = {
     uid,
-    fullName: data.fullName || "User",
-    email: data.email || "",
-    photoURL: data.photoURL || null,
+    fullName: data.fullName || auth?.currentUser?.displayName || "User",
+    email: data.email || currentEmail,
+    photoURL: data.photoURL || auth?.currentUser?.photoURL || null,
     username: data.username || null,
     bio: data.bio || null,
     location: data.location || null,
@@ -290,29 +292,32 @@ export function validatePortfolioBeforeSave(portfolio: Partial<PortfolioData>): 
  */
 export function normalizePortfolioData(data: Partial<PortfolioData>): PortfolioData {
   const ownerId = data.ownerId || data.userId || "";
-  const username = (data.username || data.slug || "user").toLowerCase().trim();
+  const username = (data.username || data.slug || "creator").toLowerCase().trim();
   const isPublished = Boolean(data.isPublished ?? data.published ?? false);
   const themeId = data.themeId || data.selectedTheme || "minimal-editorial";
-  const themeSettings = data.themeSettings || data.customThemeSettings || INITIAL_DEFAULT_PORTFOLIO.themeSettings;
-  const fullName = data.personalInfo?.fullName || "Creative Professional";
-  const professionalTitle = data.personalInfo?.professionalTitle || data.professionalTitle || "Portfolio";
+  const defaultThemeMeta = THEME_REGISTRY.find((t) => t.id === themeId) || THEME_REGISTRY[0];
+  const themeSettings = data.themeSettings || data.customThemeSettings || defaultThemeMeta.defaultSettings;
+  const fullName = data.personalInfo?.fullName !== undefined ? data.personalInfo.fullName : (data.title?.replace(/'s Portfolio$/, "") || "");
+  const professionalTitle = data.personalInfo?.professionalTitle !== undefined ? data.personalInfo.professionalTitle : (data.professionalTitle || "");
 
   // Safe resumeUrl resolution:
   // If explicitly provided as a non-empty string, preserve trimmed URL; otherwise null
   const rawResume = data.resumeUrl !== undefined ? data.resumeUrl : data.resumeURL;
   const resumeUrl = typeof rawResume === "string" && rawResume.trim() ? rawResume.trim() : null;
 
+  const baseEmpty = createEmptyPortfolio(ownerId, username, fullName, data.personalInfo?.email);
+
   return {
-    ...INITIAL_DEFAULT_PORTFOLIO,
+    ...baseEmpty,
     ...data,
-    portfolioId: data.portfolioId || "p-" + Math.random().toString(36).substring(2, 9),
+    portfolioId: data.portfolioId || baseEmpty.portfolioId,
     userId: ownerId,
     ownerId,
     username,
     slug: username,
-    title: data.title || `${fullName}'s Portfolio`,
+    title: data.title || (fullName ? `${fullName}'s Portfolio` : "My Portfolio"),
     professionalTitle,
-    description: data.description || data.about?.bioLong || data.personalInfo?.tagline || "",
+    description: data.description !== undefined ? data.description : (data.about?.bioLong || data.personalInfo?.tagline || ""),
     profileImage: data.profileImage !== undefined ? data.profileImage : (data.personalInfo?.avatarUrl || null),
     isPublished,
     published: isPublished,
@@ -323,26 +328,26 @@ export function normalizePortfolioData(data: Partial<PortfolioData>): PortfolioD
     customThemeSettings: themeSettings,
     resumeUrl: resumeUrl,
     resumeURL: resumeUrl,
-    seoTitle: data.seoTitle || `${fullName} — ${professionalTitle}`,
+    seoTitle: data.seoTitle || (fullName ? `${fullName} — ${professionalTitle || "Portfolio"}` : "FolioCraft Portfolio"),
     seoDescription: data.seoDescription || data.personalInfo?.heroHeadline || data.personalInfo?.tagline || "",
     personalInfo: {
-      ...INITIAL_DEFAULT_PORTFOLIO.personalInfo,
-      ...data.personalInfo,
+      ...baseEmpty.personalInfo,
+      ...(data.personalInfo || {}),
       fullName,
       professionalTitle,
     },
-    sections: data.sections || INITIAL_DEFAULT_PORTFOLIO.sections,
-    projects: data.projects || [],
-    experience: data.experience || [],
-    education: data.education || [],
-    skills: data.skills || [],
-    achievements: data.achievements || [],
-    certifications: data.certifications || [],
-    dynamicSections: data.dynamicSections || [],
+    sections: data.sections && data.sections.length > 0 ? data.sections : baseEmpty.sections,
+    projects: Array.isArray(data.projects) ? data.projects : [],
+    experience: Array.isArray(data.experience) ? data.experience : [],
+    education: Array.isArray(data.education) ? data.education : [],
+    skills: Array.isArray(data.skills) ? data.skills : [],
+    achievements: Array.isArray(data.achievements) ? data.achievements : [],
+    certifications: Array.isArray(data.certifications) ? data.certifications : [],
+    dynamicSections: Array.isArray(data.dynamicSections) ? data.dynamicSections : [],
     socialLinks: data.socialLinks || {},
     about: {
-      ...INITIAL_DEFAULT_PORTFOLIO.about,
-      ...data.about,
+      ...baseEmpty.about,
+      ...(data.about || {}),
     },
   };
 }
@@ -352,21 +357,52 @@ export async function getUserPortfoliosFromFirestore(userId: string): Promise<Po
   if (!db || !isFirebaseConfigured) return [];
 
   try {
-    // Query by either ownerId or userId
-    const q = query(collection(db, "portfolios"), where("userId", "==", userId));
-    const snapshot = await withTimeout(getDocs(q), 7000, "Failed to load user portfolios");
     const list: PortfolioData[] = [];
-    snapshot.forEach((d) => {
-      list.push(normalizePortfolioData(d.data() as PortfolioData));
-    });
+    const seenIds = new Set<string>();
 
-    // Also check query by ownerId if empty
-    if (list.length === 0) {
-      const qOwner = query(collection(db, "portfolios"), where("ownerId", "==", userId));
-      const ownerSnap = await withTimeout(getDocs(qOwner), 7000, "Failed to load portfolios by ownerId");
-      ownerSnap.forEach((d) => {
-        list.push(normalizePortfolioData(d.data() as PortfolioData));
+    // 1. Direct fetch primary deterministic portfolio doc if it exists (instant, no composite index needed)
+    try {
+      const directDocRef = doc(db, "portfolios", "p-" + userId);
+      const directSnap = await withTimeout(getDoc(directDocRef), 3500, "Direct read timed out");
+      if (directSnap.exists()) {
+        const item = normalizePortfolioData(directSnap.data() as PortfolioData);
+        list.push(item);
+        seenIds.add(item.portfolioId);
+      }
+    } catch {
+      // Fallback to query
+    }
+
+    // 2. Query collection by userId
+    try {
+      const q = query(collection(db, "portfolios"), where("userId", "==", userId));
+      const snapshot = await withTimeout(getDocs(q), 5000, "Failed to load user portfolios");
+      snapshot.forEach((d) => {
+        const item = normalizePortfolioData(d.data() as PortfolioData);
+        if (!seenIds.has(item.portfolioId)) {
+          list.push(item);
+          seenIds.add(item.portfolioId);
+        }
       });
+    } catch (qErr) {
+      console.warn("[Firestore] Query by userId warning:", qErr);
+    }
+
+    // 3. Query collection by ownerId if empty
+    if (list.length === 0) {
+      try {
+        const qOwner = query(collection(db, "portfolios"), where("ownerId", "==", userId));
+        const ownerSnap = await withTimeout(getDocs(qOwner), 5000, "Failed to load portfolios by ownerId");
+        ownerSnap.forEach((d) => {
+          const item = normalizePortfolioData(d.data() as PortfolioData);
+          if (!seenIds.has(item.portfolioId)) {
+            list.push(item);
+            seenIds.add(item.portfolioId);
+          }
+        });
+      } catch (qOwnerErr) {
+        console.warn("[Firestore] Query by ownerId warning:", qOwnerErr);
+      }
     }
 
     // Sort by updatedAt descending
@@ -397,28 +433,60 @@ export async function getPublishedPortfolioBySlug(username: string): Promise<Por
   if (!db || !isFirebaseConfigured) return null;
 
   const normalized = username.toLowerCase().trim();
+  if (!normalized) return null;
+
   try {
-    const q = query(
-      collection(db, "portfolios"),
-      where("username", "==", normalized),
-      where("isPublished", "==", true),
-      limit(1)
-    );
-    const snapshot = await withTimeout(getDocs(q), 7000, "Public portfolio lookup timed out");
-    if (!snapshot.empty) {
-      return normalizePortfolioData(snapshot.docs[0].data() as PortfolioData);
+    // 1. Direct lookup via usernames reservation index (instant, zero index requirements)
+    try {
+      const uRef = doc(db, "usernames", normalized);
+      const uSnap = await withTimeout(getDoc(uRef), 4000, "Username slug lookup timed out");
+      if (uSnap.exists()) {
+        const targetPortfolioId = uSnap.data()?.portfolioId;
+        if (targetPortfolioId) {
+          const pRef = doc(db, "portfolios", targetPortfolioId);
+          const pSnap = await withTimeout(getDoc(pRef), 4000, "Portfolio document lookup timed out");
+          if (pSnap.exists()) {
+            const data = pSnap.data() as PortfolioData;
+            if (data.isPublished === true || data.published === true) {
+              return normalizePortfolioData(data);
+            }
+          }
+        }
+      }
+    } catch (slugErr) {
+      console.warn("[Firestore] Direct slug reservation lookup warning:", slugErr);
     }
 
-    // Try checking 'published' alias
-    const qAlt = query(
-      collection(db, "portfolios"),
-      where("slug", "==", normalized),
-      where("published", "==", true),
-      limit(1)
-    );
-    const snapAlt = await withTimeout(getDocs(qAlt), 7000, "Public portfolio alternate lookup timed out");
-    if (!snapAlt.empty) {
-      return normalizePortfolioData(snapAlt.docs[0].data() as PortfolioData);
+    // 2. Collection query fallback by username and isPublished
+    try {
+      const q = query(
+        collection(db, "portfolios"),
+        where("username", "==", normalized),
+        where("isPublished", "==", true),
+        limit(1)
+      );
+      const snapshot = await withTimeout(getDocs(q), 5000, "Public portfolio lookup timed out");
+      if (!snapshot.empty) {
+        return normalizePortfolioData(snapshot.docs[0].data() as PortfolioData);
+      }
+    } catch (qErr) {
+      console.warn("[Firestore] Public query by username warning:", qErr);
+    }
+
+    // 3. Collection query fallback by slug alias
+    try {
+      const qAlt = query(
+        collection(db, "portfolios"),
+        where("slug", "==", normalized),
+        where("published", "==", true),
+        limit(1)
+      );
+      const snapAlt = await withTimeout(getDocs(qAlt), 5000, "Public portfolio alternate lookup timed out");
+      if (!snapAlt.empty) {
+        return normalizePortfolioData(snapAlt.docs[0].data() as PortfolioData);
+      }
+    } catch {
+      // Fallback
     }
 
     return null;
@@ -459,8 +527,16 @@ export async function savePortfolioToFirestore(portfolio: PortfolioData): Promis
   // Pre-transaction validation
   validatePortfolioBeforeSave(portfolio);
 
+  const auth = getClientAuth();
+  const currentUid = auth?.currentUser?.uid;
   const portfolioId = portfolio.portfolioId.trim();
-  const ownerId = (portfolio.ownerId || portfolio.userId || "").trim();
+  const rawOwner = (portfolio.ownerId || portfolio.userId || "").trim();
+  const resolvedOwnerId = currentUid || (rawOwner !== "demo-user" ? rawOwner : "");
+
+  if (!resolvedOwnerId) {
+    throw new Error("Authentication required: you must be signed in to save portfolio data.");
+  }
+
   const now = new Date().toISOString();
 
   try {
@@ -493,8 +569,14 @@ export async function savePortfolioToFirestore(portfolio: PortfolioData): Promis
         // Validate slug reservation conflict
         if (usernameSnap && usernameSnap.exists()) {
           const reservedPortfolioId = usernameSnap.data()?.portfolioId;
-          if (reservedPortfolioId && reservedPortfolioId !== portfolioId) {
-            throw new Error(`The username '${normalizedUsername}' is already reserved by another portfolio.`);
+          const reservedUserId = usernameSnap.data()?.userId || usernameSnap.data()?.ownerId;
+          if (
+            reservedPortfolioId &&
+            reservedPortfolioId !== portfolioId &&
+            reservedUserId &&
+            reservedUserId !== resolvedOwnerId
+          ) {
+            throw new Error(`The username '${normalizedUsername}' is already reserved by another creator.`);
           }
         }
 
@@ -536,25 +618,36 @@ export async function savePortfolioToFirestore(portfolio: PortfolioData): Promis
           }
         }
 
-        // Merge existing document fields with incoming update
+        // Merge without forcing demo hardcoded content!
+        const baseEmpty = createEmptyPortfolio(resolvedOwnerId, normalizedUsername || "creator");
         const merged: PortfolioData = {
-          ...INITIAL_DEFAULT_PORTFOLIO,
+          ...baseEmpty,
           ...(existingData || {}),
           ...portfolio,
           portfolioId,
-          userId: ownerId || existingData?.userId || existingData?.ownerId || "",
-          ownerId: ownerId || existingData?.ownerId || existingData?.userId || "",
-          username: normalizedUsername || existingData?.username || "user",
-          slug: normalizedUsername || existingData?.slug || "user",
+          userId: resolvedOwnerId,
+          ownerId: resolvedOwnerId,
+          username: normalizedUsername || existingData?.username || "creator",
+          slug: normalizedUsername || existingData?.slug || "creator",
           updatedAt: now,
           createdAt: existingData?.createdAt || portfolio.createdAt || now,
         };
+
+        // Sanitize out any accidental transient browser session blob URLs
+        if (merged.profileImage && merged.profileImage.startsWith("blob:")) {
+          merged.profileImage = existingData?.profileImage || null;
+        }
+        if (merged.personalInfo?.avatarUrl && merged.personalInfo.avatarUrl.startsWith("blob:")) {
+          merged.personalInfo.avatarUrl = existingData?.personalInfo?.avatarUrl || undefined;
+        }
 
         const normalized = normalizePortfolioData(merged);
 
         // Overlay the resolved resume field action (which could be string, null, or deleteField())
         const writePayload: Record<string, any> = {
           ...normalized,
+          userId: resolvedOwnerId,
+          ownerId: resolvedOwnerId,
           resumeUrl: resumeAction,
           resumeURL: resumeAction,
         };
@@ -569,8 +662,8 @@ export async function savePortfolioToFirestore(portfolio: PortfolioData): Promis
             {
               username: normalizedUsername,
               slug: normalizedUsername,
-              userId: merged.userId,
-              ownerId: merged.ownerId,
+              userId: resolvedOwnerId,
+              ownerId: resolvedOwnerId,
               portfolioId: portfolioId,
               updatedAt: now,
             },
